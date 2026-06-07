@@ -1,0 +1,1752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guarda-Roupa · Anna</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+  :root {
+    --bg: #0f0e0d;
+    --surface: #1a1816;
+    --card: #232120;
+    --border: #2e2b28;
+    --accent: #c9a96e;
+    --accent2: #e8d5b0;
+    --text: #f0ebe4;
+    --muted: #8a8278;
+    --tag-bg: #2a2520;
+    --red: #c06060;
+    --green: #6a9e7a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    padding: 28px 32px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    background: var(--bg);
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    letter-spacing: 0.02em;
+    color: var(--accent);
+  }
+
+  .logo span {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--accent2);
+  }
+
+  nav {
+    display: flex;
+    gap: 4px;
+  }
+
+  nav button {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 16px;
+    cursor: pointer;
+    border-radius: 20px;
+    transition: all 0.2s;
+    letter-spacing: 0.03em;
+  }
+
+  nav button.active, nav button:hover {
+    color: var(--text);
+    border-color: var(--border);
+    background: var(--surface);
+  }
+
+  nav button.active {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  /* MAIN LAYOUT */
+  main {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 24px 48px;
+  }
+
+  /* SECTION PANELS */
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---- CATÁLOGO ---- */
+  .catalog-header {
+    padding: 28px 0 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 200px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 10px 16px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .search-input:focus { border-color: var(--accent); }
+  .search-input::placeholder { color: var(--muted); }
+
+  .filter-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+  }
+
+  .item-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s, border-color 0.15s;
+    position: relative;
+  }
+
+  .item-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+  }
+
+  .item-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+
+  .item-card .select-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: var(--bg);
+    font-weight: 700;
+    z-index: 2;
+  }
+
+  .item-card.selected .select-badge { display: flex; }
+
+  .item-thumb {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: var(--muted);
+  }
+
+  .item-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .no-photo {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .no-photo-icon { font-size: 28px; }
+
+  .item-info {
+    padding: 10px 12px;
+  }
+
+  .item-id {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 2px;
+    letter-spacing: 0.05em;
+  }
+
+  .item-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .item-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: var(--tag-bg);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+
+  .tag.cat { color: var(--accent2); border-color: #3a3020; background: #201e14; }
+  .tag.cor { color: #9db8a8; border-color: #263530; background: #141e1a; }
+
+  /* ---- UPLOAD ---- */
+  .upload-panel {
+    padding: 28px 0;
+    max-width: 700px;
+  }
+
+  .section-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--accent2);
+    margin-bottom: 6px;
+  }
+
+  .section-sub {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .upload-row {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .upload-row .id-badge {
+    width: 36px;
+    height: 36px;
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .upload-row .item-desc {
+    flex: 1;
+  }
+
+  .upload-row .item-desc .name { font-size: 13px; font-weight: 500; }
+  .upload-row .item-desc .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .upload-row .thumb-mini {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 18px;
+    overflow: hidden;
+    flex-shrink: 0;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: border-color 0.2s;
+  }
+
+  .upload-row .thumb-mini:hover { border-color: var(--accent); }
+  .upload-row .thumb-mini img { width: 100%; height: 100%; object-fit: cover; }
+
+  .upload-row input[type="file"] { display: none; }
+
+  .btn-upload {
+    font-size: 11px;
+    padding: 6px 12px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-upload:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ---- STYLIST ---- */
+  .stylist-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+    padding-top: 28px;
+    min-height: calc(100vh - 120px);
+  }
+
+  .stylist-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .sidebar-section {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+
+  .sidebar-section h3 {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .selected-items-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .sel-thumb {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    color: var(--muted);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .sel-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+  .sel-thumb .remove-btn {
+    position: absolute;
+    top: 2px; right: 2px;
+    width: 16px; height: 16px;
+    background: rgba(0,0,0,0.8);
+    border: none;
+    border-radius: 50%;
+    color: var(--text);
+    font-size: 9px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .sel-thumb:hover .remove-btn { display: flex; }
+
+  .sel-thumb .item-label {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,0.7);
+    font-size: 8px;
+    padding: 3px 4px;
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .occasion-btns {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .occ-btn {
+    font-size: 11px;
+    padding: 5px 11px;
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 14px;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    transition: all 0.15s;
+  }
+
+  .occ-btn.active, .occ-btn:hover {
+    background: #241f14;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .prompt-area {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 10px 12px;
+    resize: none;
+    height: 80px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .prompt-area:focus { border-color: var(--accent); }
+  .prompt-area::placeholder { color: var(--muted); }
+
+  .btn-ask {
+    width: 100%;
+    margin-top: 10px;
+    padding: 11px;
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: opacity 0.2s;
+    letter-spacing: 0.03em;
+  }
+
+  .btn-ask:hover { opacity: 0.85; }
+  .btn-ask:disabled { opacity: 0.4; cursor: default; }
+
+  /* CHAT */
+  .chat-area {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 500px;
+  }
+
+  .chat-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-header .dot {
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .chat-header .title {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    color: var(--accent2);
+  }
+
+  .messages {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+
+  .message.assistant { align-self: flex-start; }
+  .message.user { align-self: flex-end; }
+
+  .message-bubble {
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .message.assistant .message-bubble {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  .message.user .message-bubble {
+    background: #2a2416;
+    border: 1px solid #3a3020;
+    border-bottom-right-radius: 4px;
+    color: var(--accent2);
+  }
+
+  .message-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .message.user .message-label { text-align: right; }
+
+  .typing {
+    display: flex;
+    gap: 4px;
+    padding: 14px 16px;
+  }
+
+  .typing span {
+    width: 6px;
+    height: 6px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: bounce 1.2s infinite;
+  }
+
+  .typing span:nth-child(2) { animation-delay: 0.2s; }
+  .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-8px); }
+  }
+
+  .empty-chat {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 8px;
+    color: var(--muted);
+  }
+
+  .empty-chat .icon { font-size: 36px; opacity: 0.4; }
+  .empty-chat p { font-size: 13px; max-width: 280px; line-height: 1.6; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    color: var(--accent2);
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 999;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Upload search */
+  .upload-search-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+
+  .upload-search-row .search-input { max-width: 300px; }
+
+  .count-badge {
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .count-badge strong { color: var(--accent); }
+
+  /* ---- IMPORT / EXPORT ---- */
+  .data-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 14px 0 0;
+    flex-wrap: wrap;
+  }
+
+  .btn-tool {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-tool:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-tool.primary {
+    background: #201e14;
+    border-color: #3a3020;
+    color: var(--accent2);
+  }
+
+  .btn-tool.primary:hover { border-color: var(--accent); background: #2a2416; }
+
+  .btn-tool:disabled { opacity: 0.4; cursor: default; }
+
+  /* PDF progress */
+  .pdf-progress {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+
+  .pdf-progress-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px 40px;
+    text-align: center;
+    min-width: 280px;
+  }
+
+  .pdf-progress-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 16px;
+    color: var(--accent2);
+    margin-bottom: 8px;
+  }
+
+  .pdf-progress-box p {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 20px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+
+  /* Import modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+  }
+
+  .modal-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    max-width: 520px;
+    width: 90%;
+  }
+
+  .modal-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--accent2);
+    margin-bottom: 8px;
+  }
+
+  .modal-box p {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+
+  .modal-box code {
+    font-size: 11px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    display: block;
+    color: #9db8a8;
+    margin-bottom: 20px;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .btn-cancel {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 18px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .btn-confirm {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    padding: 9px 18px;
+    background: var(--accent);
+    border: none;
+    color: var(--bg);
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .import-drop {
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    margin-bottom: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  .import-drop:hover, .import-drop.dragover { border-color: var(--accent); color: var(--accent2); }
+  .import-drop input { display: none; }
+
+  .import-preview {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 12px;
+    color: var(--accent2);
+    margin-bottom: 16px;
+    display: none;
+    line-height: 1.8;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Responsive */
+  @media (max-width: 900px) {
+    .stylist-layout { grid-template-columns: 1fr; }
+    .chat-area { min-height: 400px; }
+    header { padding: 16px; }
+    nav button { font-size: 12px; padding: 6px 12px; }
+  }
+
+  .item-card .add-hint {
+    position: absolute;
+    inset: 0;
+    background: rgba(201,169,110,0.08);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+  }
+
+  .item-card:hover .add-hint { display: flex; }
+  .item-card.selected .add-hint { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Guarda-Roupa <span>· Anna</span></div>
+  <nav>
+    <button class="active" onclick="showPanel('catalogo', this)">Catálogo</button>
+    <button onclick="showPanel('upload', this)">Adicionar Fotos</button>
+    <button onclick="showPanel('stylist', this)">Stylist IA</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- CATÁLOGO -->
+  <div id="catalogo" class="panel active">
+    <div class="catalog-header">
+      <input class="search-input" id="searchInput" placeholder="Buscar por tipo, cor, estampa..." oninput="filterItems()">
+      <select class="filter-select" id="catFilter" onchange="filterItems()">
+        <option value="">Todas categorias</option>
+        <option>Vestido</option>
+        <option>Camiseta</option>
+        <option>Blusa</option>
+        <option>Calça</option>
+        <option>Casaco</option>
+        <option>Macacão</option>
+        <option>Acessório</option>
+        <option>Outros</option>
+      </select>
+      <select class="filter-select" id="photoFilter" onchange="filterItems()">
+        <option value="">Todas as peças</option>
+        <option value="com">Com foto</option>
+        <option value="sem">Sem foto</option>
+      </select>
+    </div>
+    <div class="grid" id="itemGrid"></div>
+  </div>
+
+  <!-- UPLOAD -->
+  <div id="upload" class="panel">
+    <div class="upload-panel">
+      <h2 class="section-title">Adicionar Fotos</h2>
+      <p class="section-sub">Clique na miniatura de cada peça para vincular uma foto. As fotos ficam salvas no seu navegador e ficam disponíveis para o Stylist IA.</p>
+
+      <div class="data-toolbar">
+        <button class="btn-tool primary" onclick="openImportModal()">⬆ Importar peças (CSV/JSON)</button>
+        <button class="btn-tool primary" id="exportPdfBtn" onclick="exportPDF()">⬇ Exportar PDF</button>
+        <button class="btn-tool" onclick="exportJSON()">⬇ Backup JSON</button>
+      </div>
+
+      <div style="height:20px"></div>
+      <div class="upload-search-row">
+        <input class="search-input" id="uploadSearch" placeholder="Filtrar peças..." oninput="filterUpload()">
+        <span class="count-badge" id="photoCount"></span>
+      </div>
+      <div id="uploadList"></div>
+    </div>
+  </div>
+
+  <!-- STYLIST -->
+  <div id="stylist" class="panel">
+    <div class="stylist-layout">
+      <div class="stylist-sidebar">
+        <div class="sidebar-section">
+          <h3>Peças selecionadas</h3>
+          <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">Vá ao Catálogo e clique nas peças para selecionar. Ou deixe em branco e descreva o que precisa.</p>
+          <div class="selected-items-grid" id="selectedGrid">
+            <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>
+            <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>
+            <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Ocasião</h3>
+          <div class="occasion-btns" id="occasionBtns">
+            <button class="occ-btn" onclick="toggleOcc(this)">Trabalho</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Casual</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Noite</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Ritual</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Viagem</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Festa</button>
+            <button class="occ-btn" onclick="toggleOcc(this)">Conforto</button>
+          </div>
+        </div>
+        <div class="sidebar-section">
+          <h3>Pergunta / Pedido</h3>
+          <textarea class="prompt-area" id="userPrompt" placeholder="Ex: Monte um look pra evento cultural no sábado à noite com as peças que selecionei..."></textarea>
+          <button class="btn-ask" id="askBtn" onclick="askStylist()">Perguntar ao Stylist →</button>
+        </div>
+      </div>
+
+      <div class="chat-area" id="chatArea">
+        <div class="chat-header">
+          <div class="dot"></div>
+          <span class="title">Stylist IA</span>
+        </div>
+        <div class="messages" id="chatMessages">
+          <div class="empty-chat">
+            <div class="icon">✦</div>
+            <p>Selecione peças no catálogo, escolha a ocasião e faça sua pergunta.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- IMPORT MODAL -->
+<div class="modal-overlay" id="importModal" style="display:none">
+  <div class="modal-box">
+    <h3>Importar Peças</h3>
+    <p>Aceita <strong style="color:var(--accent2)">JSON</strong> (backup deste app) ou <strong style="color:var(--accent2)">CSV</strong> com as colunas abaixo. Peças novas são adicionadas; peças com ID já existente são ignoradas.</p>
+    <code>id,cat,tipo,cor,estampa,obs</code>
+    <label class="import-drop" id="importDrop">
+      <div>📂 Arraste o arquivo aqui ou clique para selecionar</div>
+      <div style="font-size:11px;margin-top:6px;opacity:0.6">.csv ou .json</div>
+      <input type="file" id="importFile" accept=".csv,.json" onchange="handleImportFile(this)">
+    </label>
+    <div class="import-preview" id="importPreview"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeImportModal()">Cancelar</button>
+      <button class="btn-confirm" id="importConfirmBtn" onclick="confirmImport()" disabled>Importar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF PROGRESS -->
+<div class="pdf-progress" id="pdfProgress" style="display:none">
+  <div class="pdf-progress-box">
+    <h3>Gerando PDF</h3>
+    <p id="pdfProgressText">Preparando...</p>
+    <div class="progress-bar"><div class="progress-fill" id="pdfProgressFill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- DADOS DO GUARDA-ROUPA ----
+
+const wardrobe = [
+  {id:1,cat:"Outros",tipo:"Peça escura (a confirmar)",cor:"Escuro",estampa:"Lisa/indef.",obs:"Foto borrada, difícil definir"},
+  {id:2,cat:"Camisa",tipo:"Camisa jeans manga longa",cor:"Azul jeans claro",estampa:"Lisa",obs:"Botões, dois bolsos no peito, lavagem clara"},
+  {id:3,cat:"Casaco",tipo:"Cardigan/casaco fluido",cor:"Bege/caramelo",estampa:"Lisa",obs:"Tecido fluido"},
+  {id:4,cat:"Casaco",tipo:"Robe/kimono leve",cor:"Rosa-claro (salmão)",estampa:"Lisa",obs:"Tecido leve"},
+  {id:5,cat:"Vestido",tipo:"Vestido fluido",cor:"Off-white/creme",estampa:"Lisa",obs:""},
+  {id:6,cat:"Vestido",tipo:"Vestido/blusa fluida",cor:"Rosê",estampa:"Lisa",obs:"Tecido leve"},
+  {id:7,cat:"Vestido",tipo:"Vestido/macacão malha",cor:"Rosa-velho",estampa:"Canelada",obs:"Malha canelada, com amarração"},
+  {id:8,cat:"Macacão",tipo:"Macacão estampado",cor:"Preto e branco",estampa:"Geométrica",obs:""},
+  {id:9,cat:"Vestido",tipo:"Vestido/blusa",cor:"Amarelo mostarda e verde",estampa:"Folhagem",obs:""},
+  {id:10,cat:"Blusa",tipo:"Top de tricô/crochê",cor:"Creme",estampa:"Tricô/crochê",obs:""},
+  {id:11,cat:"Calça",tipo:"Calça leve",cor:"Rosé",estampa:"Lisa",obs:"Elástico na cintura, moletom/tecido leve"},
+  {id:12,cat:"Calça",tipo:"Calça veludo cotelê",cor:"Vermelho-vinho",estampa:"Lisa",obs:"Parece veludo cotelê"},
+  {id:14,cat:"Acessório",tipo:"Bolsa de tecido",cor:"Roxo/lilás/verde",estampa:"Listrada",obs:""},
+  {id:15,cat:"Camiseta",tipo:"Camiseta/short",cor:"Vermelho vivo",estampa:"Lisa",obs:"Tecido malha"},
+  {id:16,cat:"Camiseta",tipo:"Camiseta estampada",cor:"Cinza mescla",estampa:"Estampa 'RAIN TAKE OVER'",obs:"Letras coloridas"},
+  {id:17,cat:"Camiseta",tipo:"Camiseta estampada",cor:"Marrom/vinho escuro",estampa:"Estampa 'Plenty of courage'",obs:"Letras claras"},
+  {id:18,cat:"Camiseta",tipo:"Camiseta lisa",cor:"Vermelho",estampa:"Lisa",obs:""},
+  {id:19,cat:"Camiseta",tipo:"Camiseta estampada",cor:"Marrom-clara",estampa:"Caveira/personagem",obs:"Estampa grande tons amarelo/bege"},
+  {id:20,cat:"Camiseta",tipo:"Camiseta esportiva",cor:"Laranja",estampa:"Número 8 em círculo",obs:"Estilo esportivo"},
+  {id:21,cat:"Camiseta",tipo:"Camiseta",cor:"Off-white/cru",estampa:"Estampa circular sutil",obs:""},
+  {id:22,cat:"Camiseta",tipo:"Camiseta FILA",cor:"Preto",estampa:"Logo FILA branco",obs:""},
+  {id:23,cat:"Camiseta",tipo:"Camiseta bicolor",cor:"Verde-escuro e cinza",estampa:"Bicolor",obs:""},
+  {id:24,cat:"Camiseta",tipo:"Camiseta lisa",cor:"Branco",estampa:"Lisa",obs:""},
+  {id:25,cat:"Outros",tipo:"Sacola/peça (a confirmar)",cor:"Creme",estampa:"Estampa vermelha",obs:"Rabiscos vermelhos"},
+  {id:26,cat:"Acessório",tipo:"Lenço/peça",cor:"Multicolor",estampa:"Letras em blocos retrô",obs:"Vermelho, verde, azul, amarelo"},
+  {id:27,cat:"Blusa",tipo:"Blusa/moletom",cor:"Azul-royal",estampa:"Lisa",obs:""},
+  {id:28,cat:"Vestido",tipo:"Peça estampada",cor:"Rosa/azul/off-white",estampa:"Floral aquarelado + listras",obs:""},
+  {id:29,cat:"Acessório",tipo:"Lenço/peça",cor:"Multicolor escura",estampa:"Estampa étnica",obs:""},
+  {id:30,cat:"Casaco",tipo:"Blusa/casaco moletom",cor:"Azul-royal",estampa:"Lisa",obs:"Com zíper/detalhe"},
+  {id:31,cat:"Outros",tipo:"Peça mesclada",cor:"Cinza-escuro/preto",estampa:"Lisa",obs:""},
+  {id:32,cat:"Blusa",tipo:"Blusa com babado",cor:"Azul-royal",estampa:"Lisa",obs:"Detalhe de babado/franzido"},
+  {id:33,cat:"Outros",tipo:"Peça estampada",cor:"Branco e vinho/bordô",estampa:"Paisley",obs:""},
+  {id:34,cat:"Outros",tipo:"Peça étnica/folk",cor:"Vermelho e branco",estampa:"Listrada étnica",obs:""},
+  {id:35,cat:"Vestido",tipo:"Peça tropical",cor:"Vermelho/verde/amarelo",estampa:"Tropical (folhagem e flores)",obs:"Estampa vibrante"},
+  {id:36,cat:"Vestido",tipo:"Peça tropical",cor:"Verde",estampa:"Folhas de bananeira",obs:""},
+  {id:37,cat:"Blusa",tipo:"Blusa/moletom",cor:"Cinza",estampa:"Esfumaçada clara",obs:""},
+  {id:38,cat:"Blusa",tipo:"Moletom/blusa",cor:"Cinza",estampa:"Mandala/estampa circular",obs:""},
+  {id:39,cat:"Outros",tipo:"Peça geométrica",cor:"Preto e cinza",estampa:"Geométrica",obs:""},
+  {id:40,cat:"Outros",tipo:"Peça c/ aplicações",cor:"Cinza",estampa:"Bordados (coração, floral)",obs:"Aplicações coloridas"},
+  {id:41,cat:"Camiseta",tipo:"Camiseta estampada",cor:"Laranja",estampa:"Estampa '...CLEAN...'",obs:"Letras grandes pretas"},
+  {id:42,cat:"Camiseta",tipo:"Camiseta esportiva",cor:"Preto",estampa:"Estampa '...500 100...'",obs:"Azul/branco, estilo esportivo"},
+  {id:43,cat:"Camiseta",tipo:"Camiseta FILA",cor:"Preto",estampa:"Logo FILA arco-íris",obs:"Listra colorida"},
+  {id:44,cat:"Camiseta",tipo:"Camiseta college",cor:"Verde-escuro",estampa:"Listrada college",obs:"Detalhe branco/vermelho gola/manga"},
+  {id:45,cat:"Camiseta",tipo:"Camiseta college",cor:"Verde-escuro",estampa:"Listrada college + bordado",obs:"Mesma linha da anterior"},
+  {id:46,cat:"Camiseta",tipo:"Camiseta Muay Thai",cor:"Bege/cru",estampa:"'WARRIOR Muay Thai'",obs:"Logo escuro"},
+  {id:47,cat:"Camiseta",tipo:"Camiseta estampada",cor:"Preto",estampa:"'SÃO ETER...' (letras verdes)",obs:""},
+  {id:48,cat:"Blusa",tipo:"Blusa/camiseta lisa",cor:"Cinza-clara",estampa:"Lisa",obs:""},
+  {id:49,cat:"Acessório",tipo:"Mala/bolsa de viagem",cor:"Vermelho/laranja/branco",estampa:"Xadrez",obs:"Alças de couro caramelo"},
+  {id:50,cat:"Vestido",tipo:"Vestido/blusa laise",cor:"Rosa-coral",estampa:"Bordado vazado (richelieu)",obs:""},
+  {id:51,cat:"Vestido",tipo:"Vestido estampado",cor:"Multicolor vibrante",estampa:"Geométrica",obs:"Laranja, rosa, marinho, amarelo"},
+  {id:52,cat:"Vestido",tipo:"Vestido floral",cor:"Preto",estampa:"Margaridas brancas",obs:""},
+  {id:53,cat:"Vestido",tipo:"Vestido franzido",cor:"Laranja",estampa:"Lisa",obs:""},
+  {id:54,cat:"Vestido",tipo:"Vestido estampado",cor:"Preto e branco",estampa:"Abstrata grande (zebra/folhagem)",obs:""},
+  {id:55,cat:"Vestido",tipo:"Vestido/camisa chemise",cor:"Preto",estampa:"Lisa",obs:"Botões, estilo chemise"},
+  {id:56,cat:"Outros",tipo:"Sacola com peças",cor:"Variado",estampa:"Variada",obs:"Uma laranja + uma floral preta dentro"},
+  {id:57,cat:"Vestido",tipo:"Vestido estampado",cor:"Azul/laranja/branco",estampa:"Abstrata artística",obs:""},
+  {id:58,cat:"Vestido",tipo:"Vestido floral",cor:"Branco com rosas azuis",estampa:"Floral",obs:""},
+  {id:59,cat:"Vestido",tipo:"Vestido liso",cor:"Pink/rosa-choque",estampa:"Lisa",obs:""},
+  {id:60,cat:"Vestido",tipo:"Vestido liso",cor:"Vermelho-coral",estampa:"Lisa",obs:"Com etiqueta, parece novo"},
+  {id:61,cat:"Vestido",tipo:"Vestido estampado",cor:"Verde sobre branco",estampa:"Folhagem/paisagem",obs:""},
+  {id:62,cat:"Vestido",tipo:"Vestido franzido",cor:"Laranja-coral",estampa:"Lisa",obs:""},
+  {id:63,cat:"Vestido",tipo:"Vestido poá",cor:"Azul-marinho",estampa:"Poá/bolinhas brancas",obs:"Bolinhas grandes"},
+  {id:64,cat:"Outros",tipo:"Lenço/vestido",cor:"Roxo/laranja/verde/amarelo",estampa:"Étnica/paisley vibrante",obs:""},
+  {id:65,cat:"Outros",tipo:"Peça customizada",cor:"Preto",estampa:"Aplicação flor (girassol bordado)",obs:"Handmade: miçangas, olhinhos móveis, folhas"},
+  {id:66,cat:"Camiseta",tipo:"Camiseta gráfica",cor:"Preto/vermelho/cinza",estampa:"Gráfica + escritas",obs:"'Verdiê'?"},
+  {id:67,cat:"Outros",tipo:"Lenço/peça folclórica",cor:"Vermelho",estampa:"Floral folclórica",obs:"Flores amarelas/verdes, detalhe roxo"},
+  {id:68,cat:"Vestido",tipo:"Vestido leve translúcido",cor:"Preto",estampa:"Planetas/galáxia",obs:"Voil/chiffon, estampa espacial"},
+  {id:69,cat:"Camiseta",tipo:"Camiseta evento",cor:"Preto",estampa:"'BLACK FRIDAY É NOSSA!'",obs:"Estampa rosa/azul neon"},
+  {id:70,cat:"Camiseta",tipo:"Camiseta evento/marca",cor:"Verde-limão",estampa:"'MATEUS ETC VOLEI'",obs:""},
+  {id:71,cat:"Vestido",tipo:"Vestido/blusa de festa",cor:"Preto",estampa:"Poá dourado (lurex)",obs:"Pontos metálicos"},
+  {id:72,cat:"Blusa",tipo:"Moletom campanha",cor:"Cinza",estampa:"'QUE AMAMOS' + coração",obs:"mobilizadores.org, peça de ONG"},
+  {id:73,cat:"Outros",tipo:"Lenço/peça fotográfica",cor:"Preto e branco",estampa:"Cavalo/garanhão + relâmpagos",obs:""},
+  {id:74,cat:"Vestido",tipo:"Vestido estampado",cor:"Mostarda e off-white",estampa:"Geométrica + flor cinza",obs:""},
+  {id:75,cat:"Camiseta",tipo:"Lote camisetas listradas",cor:"Preto/branco/marinho/cinza",estampa:"Listrada",obs:"Várias peças listradas juntas"},
+  {id:76,cat:"Outros",tipo:"Peça (a confirmar)",cor:"Indef.",estampa:"Indef.",obs:"Foto muito borrada"},
+  {id:77,cat:"Camiseta",tipo:"Peça geek/personagem",cor:"Roxo/preto",estampa:"Menina esqueleto cartoon",obs:"Fundo estrelado, estilo alternativo"},
+  {id:78,cat:"Calça",tipo:"Calça/peça étnica",cor:"Preto e branco",estampa:"Diamantes/geométrico",obs:""},
+  {id:79,cat:"Outros",tipo:"Peça xadrez vichy",cor:"Preto e branco",estampa:"Vichy pequeno",obs:"Calça ou camisa"},
+  {id:80,cat:"Vestido",tipo:"Vestido patchwork",cor:"Azul/verde/off-white",estampa:"Patchwork floral",obs:"Estilo anos 90"},
+  {id:81,cat:"Outros",tipo:"Peça texturizada",cor:"Preto",estampa:"Jacquard floral/cetim",obs:"Brilhante, amassado"},
+  {id:82,cat:"Vestido",tipo:"Vestido acetinado",cor:"Preto",estampa:"Lisa com brilho (cetim)",obs:"Detalhe metálico na cintura"},
+  {id:83,cat:"Vestido",tipo:"Vestido plissado/franzido",cor:"Vermelho",estampa:"Textura plissada com fio lurex",obs:"Tecido com brilho metálico sutil, mangas bufantes"},
+  {id:84,cat:"Vestido",tipo:"Vestido/saia longo",cor:"Verde",estampa:"Lisa",obs:"Cetim/acetinado, detalhe franzido na cintura com botões dourados"},
+  {id:85,cat:"Acessório",tipo:"Bolsa de tecido reutilizável",cor:"Azul-turquesa e multicolor",estampa:"Cenas brasileiras (arquitetura)",obs:"Estampa de cidade/patrimônio, texto 'BRASILEIROS'"},
+  {id:86,cat:"Vestido",tipo:"Vestido/saia longo",cor:"Preto e dourado/amarelo",estampa:"Paisley/bandana",obs:"Estampa geométrica oriental, tons preto/dourado/azul claro"},
+  {id:87,cat:"Vestido",tipo:"Vestido longo estampado",cor:"Verde e vermelho",estampa:"Floral/joia com pedrarias",obs:"Estampa elaborada com joias/pedrarias aplicadas, multicolor vibrante"},
+  {id:88,cat:"Casaco",tipo:"Jaqueta jeans",cor:"Azul jeans claro",estampa:"Lisa",obs:"Botões metálicos, dois bolsos no peito, forro interno floral"},
+  {id:89,cat:"Vestido",tipo:"Vestido/blusa fluida",cor:"Rosê/salmão claro",estampa:"Lisa",obs:"Tecido fluido tipo cetim, alças finas"},
+  {id:90,cat:"Blusa",tipo:"Blusa/kimono fluido",cor:"Bege/nude",estampa:"Lisa",obs:"Tecido leve tipo crepe/chiffon"},
+  {id:91,cat:"Vestido",tipo:"Vestido longo",cor:"Rosa-velho/mauve",estampa:"Lisa com textura",obs:"Tecido com textura sutil, fecho dourado na lateral"},
+  {id:92,cat:"Vestido",tipo:"Vestido/blusa longa",cor:"Rosa médio/antigo",estampa:"Lisa",obs:"Botões de tecido na frente, tecido fluido"},
+  {id:93,cat:"Vestido",tipo:"Vestido/calça longo",cor:"Off-white/creme",estampa:"Lisa",obs:"Tecido fluido liso"},
+  {id:94,cat:"Blusa",tipo:"Top/blusa canelada",cor:"Off-white/creme",estampa:"Textura canelada/waffle",obs:"Malha waffle, estilo cropped/top"},
+  {id:95,cat:"Vestido",tipo:"Vestido estampado",cor:"Amarelo mostarda e azul-petróleo",estampa:"Folhagem tropical",obs:"Estampa grande de folhas, tecido fluido"},
+  {id:96,cat:"Calça",tipo:"Calça estampada",cor:"Preto e branco com azul",estampa:"Geométrica/azulejo",obs:"Estampa de azulejo, tecido malha"},
+  {id:97,cat:"Calça",tipo:"Calça/legging lurex",cor:"Prata/dourado",estampa:"Lurex/brilho",obs:"Tecido metálico, detalhe franzido preto na cintura"},
+  {id:98,cat:"Calça",tipo:"Calça jeans/social",cor:"Vinho/bordô",estampa:"Lisa",obs:"Tecido denim/brim, cor vinho"},
+];
+
+// ---- STATE ----
+let photos = {}; // id -> base64 dataURL
+let selectedItems = new Set();
+let chatHistory = [];
+
+// Load from localStorage
+try {
+  const saved = localStorage.getItem('grardrobe_photos');
+  if (saved) photos = JSON.parse(saved);
+  const savedSel = localStorage.getItem('grardrobe_selected');
+  if (savedSel) selectedItems = new Set(JSON.parse(savedSel));
+} catch(e) {}
+
+function savePhotos() {
+  try { localStorage.setItem('grardrobe_photos', JSON.stringify(photos)); } catch(e) {}
+}
+
+function saveSelected() {
+  try { localStorage.setItem('grardrobe_selected', JSON.stringify([...selectedItems])); } catch(e) {}
+}
+
+// ---- PANELS ----
+function showPanel(id, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById(id).classList.remove('active');
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (id === 'catalogo') renderGrid();
+  if (id === 'upload') renderUpload();
+  if (id === 'stylist') renderSelectedPanel();
+}
+
+// ---- CATALOG ----
+function renderGrid(filtered) {
+  const grid = document.getElementById('itemGrid');
+  const items = filtered || wardrobe;
+  grid.innerHTML = items.map(item => {
+    const photo = photos[item.id];
+    const sel = selectedItems.has(item.id);
+    return `
+    <div class="item-card ${sel ? 'selected' : ''}" onclick="toggleSelect(${item.id}, this)" title="Clique para selecionar para o Stylist">
+      <div class="select-badge">✓</div>
+      <div class="add-hint">＋</div>
+      ${photo
+        ? `<div class="item-thumb"><img src="${photo}" alt=""></div>`
+        : `<div class="no-photo"><span class="no-photo-icon">📷</span><span>sem foto</span></div>`
+      }
+      <div class="item-info">
+        <div class="item-id">#${item.id}</div>
+        <div class="item-name">${item.tipo}</div>
+        <div class="item-tags">
+          <span class="tag cat">${item.cat}</span>
+          <span class="tag cor">${item.cor}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filterItems() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const cat = document.getElementById('catFilter').value;
+  const photoF = document.getElementById('photoFilter').value;
+  const filtered = wardrobe.filter(i => {
+    const text = `${i.tipo} ${i.cor} ${i.estampa} ${i.obs} ${i.cat}`.toLowerCase();
+    const matchQ = !q || text.includes(q);
+    const matchCat = !cat || i.cat === cat;
+    const matchPhoto = !photoF || (photoF === 'com' ? !!photos[i.id] : !photos[i.id]);
+    return matchQ && matchCat && matchPhoto;
+  });
+  renderGrid(filtered);
+}
+
+function toggleSelect(id, card) {
+  if (selectedItems.has(id)) {
+    selectedItems.delete(id);
+    card.classList.remove('selected');
+  } else {
+    selectedItems.add(id);
+    card.classList.add('selected');
+  }
+  saveSelected();
+  renderSelectedPanel();
+  showToast(`Peça #${id} ${selectedItems.has(id) ? 'adicionada ao' : 'removida do'} Stylist`);
+}
+
+// ---- UPLOAD ----
+function renderUpload(filtered) {
+  const list = document.getElementById('uploadList');
+  const items = filtered || wardrobe;
+  const withPhoto = wardrobe.filter(i => photos[i.id]).length;
+  document.getElementById('photoCount').innerHTML = `<strong>${withPhoto}</strong> de ${wardrobe.length} com foto`;
+  
+  list.innerHTML = items.map(item => {
+    const photo = photos[item.id];
+    return `
+    <div class="upload-row">
+      <div class="id-badge">${item.id}</div>
+      <div class="item-desc">
+        <div class="name">${item.tipo}</div>
+        <div class="sub">${item.cat} · ${item.cor}</div>
+      </div>
+      <label class="thumb-mini" for="file_${item.id}" title="Clique para adicionar foto">
+        ${photo ? `<img src="${photo}" alt="">` : '📷'}
+      </label>
+      <input type="file" id="file_${item.id}" accept="image/*" onchange="handlePhoto(${item.id}, this)">
+      ${photo ? `<button class="btn-upload" onclick="removePhoto(${item.id})" style="color:var(--red);border-color:var(--red)">✕</button>` : `<button class="btn-upload" onclick="document.getElementById('file_${item.id}').click()">Adicionar</button>`}
+    </div>`;
+  }).join('');
+}
+
+function filterUpload() {
+  const q = document.getElementById('uploadSearch').value.toLowerCase();
+  const filtered = wardrobe.filter(i => {
+    const text = `${i.tipo} ${i.cor} ${i.estampa} ${i.cat}`.toLowerCase();
+    return !q || text.includes(q);
+  });
+  renderUpload(filtered);
+}
+
+function handlePhoto(id, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    photos[id] = e.target.result;
+    savePhotos();
+    renderUpload();
+    renderGrid();
+    showToast(`Foto da peça #${id} salva!`);
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto(id) {
+  delete photos[id];
+  savePhotos();
+  renderUpload();
+  renderGrid();
+}
+
+// ---- STYLIST SIDEBAR ----
+function renderSelectedPanel() {
+  const grid = document.getElementById('selectedGrid');
+  const items = [...selectedItems].map(id => wardrobe.find(i => i.id === id)).filter(Boolean);
+  
+  if (items.length === 0) {
+    grid.innerHTML = `
+      <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>
+      <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>
+      <div class="sel-thumb" style="color:var(--border);font-size:20px;">+</div>`;
+    return;
+  }
+
+  grid.innerHTML = items.map(item => {
+    const photo = photos[item.id];
+    return `
+    <div class="sel-thumb">
+      ${photo ? `<img src="${photo}" alt="">` : `<span style="font-size:18px">👗</span>`}
+      <div class="item-label">#${item.id} ${item.cat}</div>
+      <button class="remove-btn" onclick="deselectItem(${item.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+
+function deselectItem(id) {
+  selectedItems.delete(id);
+  saveSelected();
+  renderSelectedPanel();
+  renderGrid();
+}
+
+// ---- OCCASION ----
+function toggleOcc(btn) {
+  btn.classList.toggle('active');
+}
+
+// ---- STYLIST IA ----
+async function askStylist() {
+  const prompt = document.getElementById('userPrompt').value.trim();
+  const occasions = [...document.querySelectorAll('.occ-btn.active')].map(b => b.textContent);
+  const selectedItemsList = [...selectedItems].map(id => wardrobe.find(i => i.id === id)).filter(Boolean);
+
+  if (!prompt && occasions.length === 0 && selectedItemsList.length === 0) {
+    showToast('Escreva uma pergunta ou selecione peças');
+    return;
+  }
+
+  const btn = document.getElementById('askBtn');
+  btn.disabled = true;
+  btn.textContent = 'Consultando...';
+
+  // Build context
+  const wardrobeContext = wardrobe.map(i =>
+    `#${i.id} | ${i.cat} | ${i.tipo} | ${i.cor} | Estampa: ${i.estampa}${i.obs ? ` | Obs: ${i.obs}` : ''}${photos[i.id] ? ' | [tem foto]' : ''}`
+  ).join('\n');
+
+  const selContext = selectedItemsList.length > 0
+    ? `\n\nPeças que a Anna selecionou para esse look:\n` + selectedItemsList.map(i =>
+        `#${i.id} ${i.tipo} - ${i.cor} (${i.estampa})`).join('\n')
+    : '';
+
+  const occContext = occasions.length > 0 ? `\nOcasião desejada: ${occasions.join(', ')}` : '';
+  const userQuestion = prompt || `Monte sugestões de look${occContext ? ` para ${occasions.join(', ')}` : ''}.`;
+
+  const systemPrompt = `Você é uma stylist pessoal especializada no guarda-roupa da Anna — mulher de Porto Alegre com estilo eclético, colorido e criativo, que combina looks do dia a dia com necessidades de líder religiosa de Umbanda/Quimbanda.
+
+Guarda-roupa completo da Anna:
+${wardrobeContext}
+${selContext}
+${occContext}
+
+Suas respostas devem:
+- Ser diretas e práticas, sem rodeios
+- Referenciar as peças sempre pelo ID (#número) e nome
+- Sugerir combinações viáveis com o que ela tem
+- Quando pedir triagem, ser honesta sobre o que faz sentido manter ou não
+- Considerar versatilidade, ocasião e identidade visual dela
+- Responder em português brasileiro, tom direto e amigável
+- Nunca inventar peças que não estão no catálogo`;
+
+  // Add to chat
+  const userMsg = `${occContext ? `Ocasião: ${occasions.join(', ')}\n` : ''}${userQuestion}`;
+  addMessage('user', userMsg);
+  document.getElementById('userPrompt').value = '';
+
+  // Add typing indicator
+  const typingId = addTyping();
+
+  try {
+    const messages = [
+      ...chatHistory,
+      { role: 'user', content: userQuestion }
+    ];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages
+      })
+    });
+
+    removeTyping(typingId);
+
+    const data = await response.json();
+    const reply = data.content?.find(b => b.type === 'text')?.text || 'Erro ao processar resposta.';
+    
+    chatHistory.push({ role: 'user', content: userQuestion });
+    chatHistory.push({ role: 'assistant', content: reply });
+    
+    // Keep history manageable
+    if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+
+    addMessage('assistant', reply);
+  } catch(e) {
+    removeTyping(typingId);
+    addMessage('assistant', 'Erro de conexão. Verifique se está no claude.ai e tente novamente.');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Perguntar ao Stylist →';
+}
+
+function addMessage(role, text) {
+  const msgs = document.getElementById('chatMessages');
+  const empty = msgs.querySelector('.empty-chat');
+  if (empty) empty.remove();
+
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  div.innerHTML = `
+    <div class="message-label">${role === 'user' ? 'Você' : '✦ Stylist'}</div>
+    <div class="message-bubble">${text.replace(/\n/g, '<br>')}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+let typingCounter = 0;
+function addTyping() {
+  const msgs = document.getElementById('chatMessages');
+  const id = 'typing_' + (++typingCounter);
+  const div = document.createElement('div');
+  div.className = 'message assistant';
+  div.id = id;
+  div.innerHTML = `
+    <div class="message-label">✦ Stylist</div>
+    <div class="message-bubble" style="padding:8px 16px">
+      <div class="typing"><span></span><span></span><span></span></div>
+    </div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+
+function removeTyping(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+}
+
+// ---- TOAST ----
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ---- IMPORT ----
+let importPending = [];
+
+function openImportModal() {
+  document.getElementById('importModal').style.display = 'flex';
+  document.getElementById('importPreview').style.display = 'none';
+  document.getElementById('importConfirmBtn').disabled = true;
+  document.getElementById('importFile').value = '';
+  importPending = [];
+}
+
+function closeImportModal() {
+  document.getElementById('importModal').style.display = 'none';
+}
+
+// Drag & drop
+const importDrop = document.getElementById('importDrop');
+importDrop.addEventListener('dragover', e => { e.preventDefault(); importDrop.classList.add('dragover'); });
+importDrop.addEventListener('dragleave', () => importDrop.classList.remove('dragover'));
+importDrop.addEventListener('drop', e => {
+  e.preventDefault();
+  importDrop.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processImportFile(file);
+});
+
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (file) processImportFile(file);
+}
+
+function processImportFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      let parsed = [];
+      if (ext === 'json') {
+        const data = JSON.parse(text);
+        // Support both array of items or full backup {wardrobe:[...], photos:{...}} format
+        if (Array.isArray(data)) {
+          parsed = data;
+        } else {
+          parsed = data.wardrobe || [];
+          // If it's a full backup, offer to restore photos too
+          if (data.photos) {
+            const photoKeys = Object.keys(data.photos);
+            if (photoKeys.length > 0) {
+              // Merge photos (don't overwrite existing ones)
+              photoKeys.forEach(k => { if (!photos[k]) photos[k] = data.photos[k]; });
+              savePhotos();
+              showToast(`${photoKeys.length} fotos do backup restauradas`);
+            }
+          }
+        }
+      } else if (ext === 'csv') {
+        parsed = parseCSV(text);
+      } else {
+        showToast('Formato não suportado. Use .csv ou .json');
+        return;
+      }
+
+      const existingIds = new Set(wardrobe.map(i => i.id));
+      const newItems = parsed.filter(i => i.id && !existingIds.has(Number(i.id)));
+      importPending = newItems.map(i => ({
+        id: Number(i.id),
+        cat: i.cat || 'Outros',
+        tipo: i.tipo || i.type || '',
+        cor: i.cor || i.color || '',
+        estampa: i.estampa || i.pattern || '',
+        obs: i.obs || i.notes || ''
+      }));
+
+      const preview = document.getElementById('importPreview');
+      if (importPending.length === 0) {
+        preview.textContent = '⚠ Nenhuma peça nova encontrada (todas já existem ou arquivo inválido)';
+        preview.style.display = 'block';
+        document.getElementById('importConfirmBtn').disabled = true;
+      } else {
+        preview.innerHTML = `✓ <strong>${importPending.length}</strong> peças novas encontradas:<br>` +
+          importPending.slice(0, 5).map(i => `· #${i.id} ${i.tipo} (${i.cat})`).join('<br>') +
+          (importPending.length > 5 ? `<br>... e mais ${importPending.length - 5}` : '');
+        preview.style.display = 'block';
+        document.getElementById('importConfirmBtn').disabled = false;
+      }
+    } catch(err) {
+      showToast('Erro ao ler arquivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = vals[i] || '');
+    return obj;
+  });
+}
+
+function confirmImport() {
+  if (!importPending.length) return;
+  wardrobe.push(...importPending);
+  wardrobe.sort((a, b) => a.id - b.id);
+  showToast(`${importPending.length} peças importadas com sucesso!`);
+  closeImportModal();
+  renderGrid();
+  renderUpload();
+  importPending = [];
+}
+
+// ---- EXPORT JSON BACKUP ----
+function exportJSON() {
+  const data = { wardrobe, photos, exported: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `guarda-roupa-backup-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Backup JSON salvo!');
+}
+
+// ---- EXPORT PDF ----
+async function exportPDF() {
+  const btn = document.getElementById('exportPdfBtn');
+  btn.disabled = true;
+
+  const progress = document.getElementById('pdfProgress');
+  const progressText = document.getElementById('pdfProgressText');
+  const progressFill = document.getElementById('pdfProgressFill');
+  progress.style.display = 'flex';
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const pageW = 210;
+    const pageH = 297;
+    const margin = 14;
+    const cols = 3;
+    const cardW = (pageW - margin * 2 - (cols - 1) * 6) / cols; // ~54mm
+    const imgSize = cardW;
+    const cardH = imgSize + 22;
+    const startY = 36;
+
+    // ---- COVER PAGE ----
+    doc.setFillColor(15, 14, 13);
+    doc.rect(0, 0, pageW, pageH, 'F');
+
+    doc.setFillColor(40, 36, 30);
+    doc.rect(0, 0, pageW, 3, 'F');
+    doc.setFillColor(201, 169, 110);
+    doc.rect(0, 3, pageW, 1, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(201, 169, 110);
+    doc.text('Guarda-Roupa', pageW / 2, 90, { align: 'center' });
+
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(18);
+    doc.setTextColor(232, 213, 176);
+    doc.text('Anna', pageW / 2, 103, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(138, 130, 120);
+    doc.text(`${wardrobe.length} peças catalogadas`, pageW / 2, 116, { align: 'center' });
+
+    const withPhoto = wardrobe.filter(i => photos[i.id]).length;
+    doc.text(`${withPhoto} com foto`, pageW / 2, 124, { align: 'center' });
+    doc.text(`Gerado em ${new Date().toLocaleDateString('pt-BR')}`, pageW / 2, 132, { align: 'center' });
+
+    // Summary table by category
+    const cats = {};
+    wardrobe.forEach(i => { cats[i.cat] = (cats[i.cat] || 0) + 1; });
+    const catRows = Object.entries(cats).sort((a,b) => b[1]-a[1]);
+
+    doc.setFontSize(9);
+    doc.setTextColor(201, 169, 110);
+    doc.text('RESUMO POR CATEGORIA', pageW / 2, 155, { align: 'center' });
+
+    doc.autoTable({
+      startY: 160,
+      head: [['Categoria', 'Qtd']],
+      body: catRows,
+      margin: { left: 60, right: 60 },
+      styles: { fillColor: [26, 24, 22], textColor: [240, 235, 228], fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [42, 37, 30], textColor: [201, 169, 110], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [35, 33, 32] },
+    });
+
+    // ---- ITEMS PAGES ----
+    // Group by category
+    const categories = [...new Set(wardrobe.map(i => i.cat))].sort();
+
+    for (const cat of categories) {
+      const items = wardrobe.filter(i => i.cat === cat);
+      doc.addPage();
+
+      // Category header
+      doc.setFillColor(15, 14, 13);
+      doc.rect(0, 0, pageW, pageH, 'F');
+      doc.setFillColor(201, 169, 110);
+      doc.rect(margin, 18, pageW - margin * 2, 0.5, 'F');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(14);
+      doc.setTextColor(201, 169, 110);
+      doc.text(cat.toUpperCase(), margin, 15);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(138, 130, 120);
+      doc.text(`${items.length} peças`, pageW - margin, 15, { align: 'right' });
+
+      let x = margin;
+      let y = startY;
+      let col = 0;
+
+      const total = items.length;
+
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+
+        // Update progress
+        const overallIdx = wardrobe.indexOf(item);
+        const pct = Math.round((overallIdx / wardrobe.length) * 100);
+        progressFill.style.width = pct + '%';
+        progressText.textContent = `Adicionando peça #${item.id} (${pct}%)`;
+
+        // Check page overflow
+        if (y + cardH > pageH - 10) {
+          doc.addPage();
+          doc.setFillColor(15, 14, 13);
+          doc.rect(0, 0, pageW, pageH, 'F');
+          doc.setFillColor(201, 169, 110);
+          doc.rect(margin, 10, pageW - margin * 2, 0.5, 'F');
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.setTextColor(138, 130, 120);
+          doc.text(cat + ' (cont.)', margin, 8);
+          y = 18;
+          x = margin;
+          col = 0;
+        }
+
+        // Card background
+        doc.setFillColor(35, 33, 32);
+        doc.roundedRect(x, y, cardW, cardH, 2, 2, 'F');
+
+        // Photo or placeholder
+        const photo = photos[item.id];
+        if (photo) {
+          try {
+            doc.addImage(photo, 'JPEG', x, y, cardW, imgSize, '', 'FAST');
+          } catch {
+            drawPhotoPlaceholder(doc, x, y, cardW, imgSize);
+          }
+        } else {
+          drawPhotoPlaceholder(doc, x, y, cardW, imgSize);
+        }
+
+        // Info area below photo
+        const infoY = y + imgSize + 2;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7);
+        doc.setTextColor(201, 169, 110);
+        doc.text(`#${item.id}`, x + 2, infoY + 4);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6.5);
+        doc.setTextColor(240, 235, 228);
+        const tipoLines = doc.splitTextToSize(item.tipo, cardW - 4);
+        doc.text(tipoLines[0], x + 2, infoY + 9);
+
+        doc.setTextColor(157, 184, 168);
+        doc.text(item.cor.length > 20 ? item.cor.slice(0,20) + '…' : item.cor, x + 2, infoY + 14);
+
+        // Advance grid
+        col++;
+        if (col >= cols) {
+          col = 0;
+          x = margin;
+          y += cardH + 6;
+        } else {
+          x += cardW + 6;
+        }
+      }
+
+      // Allow async yield between categories
+      await new Promise(r => setTimeout(r, 0));
+    }
+
+    // ---- PAGE NUMBERS ----
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 2; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(80, 75, 70);
+      doc.text(`${i} / ${pageCount}`, pageW - margin, pageH - 6, { align: 'right' });
+    }
+
+    progressFill.style.width = '100%';
+    progressText.textContent = 'Salvando arquivo...';
+    await new Promise(r => setTimeout(r, 300));
+
+    doc.save(`guarda-roupa-anna-${new Date().toISOString().slice(0,10)}.pdf`);
+    showToast('PDF exportado com sucesso!');
+  } catch(err) {
+    showToast('Erro ao gerar PDF: ' + err.message);
+    console.error(err);
+  } finally {
+    progress.style.display = 'none';
+    btn.disabled = false;
+  }
+}
+
+function drawPhotoPlaceholder(doc, x, y, w, h) {
+  doc.setFillColor(26, 24, 22);
+  doc.rect(x, y, w, h, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(16);
+  doc.setTextColor(46, 43, 40);
+  doc.text('📷', x + w / 2, y + h / 2 + 3, { align: 'center' });
+  doc.setFontSize(7);
+  doc.setTextColor(80, 75, 70);
+  doc.text('sem foto', x + w / 2, y + h / 2 + 10, { align: 'center' });
+}
+
+// ---- INIT ----
+renderGrid();
+</script>
+</body>
+</html>
