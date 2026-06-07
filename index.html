@@ -997,7 +997,7 @@ async function askStylist() {
   document.getElementById('userPrompt').value = '';
   const typingId = addTyping();
   try {
-    t fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system,
         messages: [...chatHistory, {role:'user',content:userQ}] })
