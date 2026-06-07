@@ -1009,33 +1009,47 @@ function saveAll() {
 // Debounce do sync na nuvem — evita disparar a cada tecla
 let cloudSyncTimer = null;
 let cloudSyncing = false;
+let pendingSync = false;
 function scheduleCloudSync() {
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(doCloudSync, 1500);
   updateSyncStatus('pending');
 }
 
+// Força o sync imediatamente (usado depois de adicionar/salvar fotos)
+function flushCloudSync() {
+  if (cloudSyncTimer) { clearTimeout(cloudSyncTimer); cloudSyncTimer = null; }
+  return doCloudSync();
+}
+
 async function doCloudSync() {
-  if (cloudSyncing) { scheduleCloudSync(); return; }
+  if (cloudSyncing) { pendingSync = true; return; }
   cloudSyncing = true;
   updateSyncStatus('saving');
   const estado = {
     photos, selectedItems: [...selectedItems], vocab, itemTags, wardrobe,
     savedAt: new Date().toISOString()
   };
+  const payload = JSON.stringify(estado);
+  const sizeMB = (payload.length / 1048576).toFixed(2);
+  console.log('Sync: enviando ' + sizeMB + ' MB');
   try {
     const res = await fetch(CLOUDFLARE_API, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': API_TOKEN },
-      body: JSON.stringify(estado)
+      body: payload
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' (' + sizeMB + ' MB)');
     updateSyncStatus('ok');
   } catch(e) {
-    console.warn('Sync nuvem falhou (dados salvos localmente):', e);
+    console.warn('Sync nuvem falhou:', e);
     updateSyncStatus('error');
+    if (parseFloat(sizeMB) > 4) {
+      showToast('⚠ Backup muito grande ('+sizeMB+' MB). As fotos podem não estar salvando na nuvem.');
+    }
   } finally {
     cloudSyncing = false;
+    if (pendingSync) { pendingSync = false; setTimeout(doCloudSync, 200); }
   }
 }
 
@@ -1323,7 +1337,7 @@ function getTagsFromEditor(containerId) {
     .map(c => c.textContent.replace('✕','').trim());
 }
 
-function saveEditModal() {
+async function saveEditModal() {
   const tipo = document.getElementById('editTipo').value.trim();
   const cat = document.getElementById('editCat').value;
   const cor = document.getElementById('editCor').value.trim();
@@ -1370,7 +1384,8 @@ function saveEditModal() {
   closeEditModal();
   buildFilterUI();
   filterItems();   // re-aplica filtros ativos em vez de mostrar tudo
-  showToast(editingId ? 'Peça atualizada!' : 'Peça adicionada!');
+  showToast(editingId ? 'Peça atualizada! Sincronizando...' : 'Peça adicionada! Sincronizando...');
+  await flushCloudSync();
 }
 
 function deleteCurrentItem() {
@@ -1391,7 +1406,7 @@ function closeEditModal() { document.getElementById('editModal').style.display =
 // slot: 0=principal, 1=extra
 // Comprime/redimensiona uma foto antes de salvar (evita arquivos gigantes que estouram a nuvem)
 // Retorna uma Promise com a dataURL JPEG já reduzida.
-function compressImage(file, maxDim = 1000, quality = 0.72) {
+function compressImage(file, maxDim = 800, quality = 0.6) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -1509,9 +1524,10 @@ async function handlePhoto(id, input) {
   const cur = photos[id];
   if (Array.isArray(cur) && cur[1]) photos[id] = [dataUrl, cur[1]];
   else photos[id] = dataUrl;
-  save('gr_photos', photos);
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
   renderUpload(); renderGrid();
-  showToast(`Foto da peça #${id} salva!`);
+  showToast(`Foto da peça #${id} salva! Sincronizando...`);
+  await flushCloudSync();   // salva na nuvem JÁ, não espera o debounce
 }
 
 function removePhoto(id) {
@@ -2030,11 +2046,12 @@ function saveBulkPhotos() {
     else if (p0) photos[id] = p0;
     else if (p1) photos[id] = [null, p1];
   });
-  save('gr_photos', photos);
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
   closeBulkModal();
   renderGrid();
   renderUpload();
-  showToast(`${count} fotos salvas!`);
+  showToast(`${count} fotos salvas! Sincronizando...`);
+  flushCloudSync();
 }
 
 // ===================== TOAST =====================
