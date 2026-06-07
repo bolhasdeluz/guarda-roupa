@@ -281,6 +281,23 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 <div class="modal-overlay" id="editModal" style="display:none">
   <div class="modal-box">
     <h3 id="editModalTitle">Editar Peça</h3>
+
+    <!-- FOTO -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <label for="editPhotoInput" id="editPhotoThumb" style="width:80px;height:80px;border-radius:10px;border:1px dashed var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0;transition:border-color .2s" title="Adicionar foto" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="if(!this.querySelector('img'))this.style.borderColor='var(--border)'">
+        <span id="editPhotoIcon" style="font-size:26px">📷</span>
+        <span id="editPhotoLabel" style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>
+      </label>
+      <input type="file" id="editPhotoInput" accept="image/*" style="display:none" onchange="handleEditPhoto(this)">
+      <div style="flex:1">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Foto</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-upload" onclick="document.getElementById('editPhotoInput').click()" style="font-size:12px;padding:7px 12px">📷 Adicionar foto</button>
+          <button class="btn-upload" id="editPhotoRemoveBtn" onclick="removeEditPhoto()" style="font-size:12px;padding:7px 12px;color:var(--red);border-color:var(--red);display:none">✕ Remover</button>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-grid">
       <div>
         <div class="field-label">Categoria</div>
@@ -973,6 +990,21 @@ function openEditModal(id, event) {
   buildTagEditor('editOcasiaoTags', 'ocasioes', tags.ocasioes || []);
   buildTagEditor('editOrigemTags', 'origens', tags.origens || []);
 
+  // Populate photo thumbnail
+  const thumb = document.getElementById('editPhotoThumb');
+  const removeBtn = document.getElementById('editPhotoRemoveBtn');
+  thumb._pendingPhoto = null; thumb._removePhoto = false;
+  document.getElementById('editPhotoInput').value = '';
+  if (photos[id]) {
+    thumb.style.border = '1px solid var(--accent)';
+    thumb.innerHTML = `<img src="${photos[id]}" style="width:100%;height:100%;object-fit:cover">`;
+    removeBtn.style.display = 'inline-flex';
+  } else {
+    thumb.style.border = '1px dashed var(--border)';
+    thumb.innerHTML = '<span style="font-size:26px">📷</span><span style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
+    removeBtn.style.display = 'none';
+  }
+
   document.getElementById('editModal').style.display = 'flex';
 }
 
@@ -991,6 +1023,14 @@ function openNewItemModal() {
   buildTagEditor('editEstacaoTags', 'estacoes', []);
   buildTagEditor('editOcasiaoTags', 'ocasioes', []);
   buildTagEditor('editOrigemTags', 'origens', []);
+  // Reset photo
+  const thumb2 = document.getElementById('editPhotoThumb');
+  const removeBtn2 = document.getElementById('editPhotoRemoveBtn');
+  thumb2._pendingPhoto = null; thumb2._removePhoto = false;
+  document.getElementById('editPhotoInput').value = '';
+  thumb2.style.border = '1px dashed var(--border)';
+  thumb2.innerHTML = '<span style="font-size:26px">📷</span><span style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
+  removeBtn2.style.display = 'none';
   document.getElementById('editModal').style.display = 'flex';
 }
 
@@ -1066,6 +1106,17 @@ function saveEditModal() {
     wardrobe.push({id: newId, cat, tipo, cor, estampa, obs});
     if (Object.values(tags).some(t => t.length > 0)) itemTags[newId] = tags;
   }
+  // Apply photo changes from modal
+  const thumb = document.getElementById('editPhotoThumb');
+  const targetId = editingId !== null ? editingId : (Math.max(0, ...wardrobe.map(i => i.id)));
+  if (thumb._pendingPhoto) {
+    photos[targetId] = thumb._pendingPhoto;
+    save('gr_photos', photos);
+  } else if (thumb._removePhoto) {
+    delete photos[targetId];
+    save('gr_photos', photos);
+  }
+
   saveAll();
   closeEditModal();
   buildFilterUI();
@@ -1087,6 +1138,29 @@ function deleteCurrentItem() {
 }
 
 function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
+
+function handleEditPhoto(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const thumb = document.getElementById('editPhotoThumb');
+    thumb.style.border = '1px solid var(--accent)';
+    thumb.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    document.getElementById('editPhotoRemoveBtn').style.display = 'inline-flex';
+    thumb._pendingPhoto = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeEditPhoto() {
+  const thumb = document.getElementById('editPhotoThumb');
+  thumb.style.border = '1px dashed var(--border)';
+  thumb.innerHTML = '<span id="editPhotoIcon" style="font-size:26px">📷</span><span id="editPhotoLabel" style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
+  thumb._pendingPhoto = null;
+  thumb._removePhoto = true;
+  document.getElementById('editPhotoRemoveBtn').style.display = 'none';
+  document.getElementById('editPhotoInput').value = '';
+}
 
 function addNewOption(type) {
   const labels = { categoria: 'categoria' };
