@@ -202,15 +202,16 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .bulk-preview-info{flex:1}
 .bulk-preview-info .name{font-size:14px;font-weight:500;margin-bottom:4px}
 .bulk-preview-info .sub{font-size:11px;color:var(--muted)}
-.bulk-grid{flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.bulk-grid{flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(105px,1fr));gap:8px;align-content:start}
 .bulk-card{border-radius:8px;border:2px solid var(--border);overflow:hidden;cursor:pointer;transition:border-color .15s;background:var(--card);position:relative}
 .bulk-card:hover{border-color:var(--accent)}
 .bulk-card.has-photo{border-color:#3a3020}
 .bulk-card .bthumb{width:100%;aspect-ratio:1;object-fit:cover;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--muted)}
 .bulk-card .bthumb img{width:100%;height:100%;object-fit:cover}
-.bulk-card .binfo{padding:5px 6px;font-size:9px}
-.bulk-card .binfo .bid{color:var(--accent);font-weight:600}
-.bulk-card .binfo .bname{color:var(--muted);line-height:1.3;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bulk-card .binfo{padding:6px 7px;font-size:10px}
+.bulk-card .binfo .bid{color:var(--accent);font-weight:600;font-size:9px}
+.bulk-card .binfo .bname{color:var(--text);line-height:1.25;margin-top:2px;font-size:11px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.bulk-card .binfo .bsub{color:var(--muted);font-size:9px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bulk-card .bcheck{position:absolute;top:4px;right:4px;width:16px;height:16px;background:var(--green);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:9px;color:#fff}
 .bulk-card.has-photo .bcheck{display:flex}
 .bulk-drop-hint{position:absolute;inset:0;background:rgba(201,169,110,.15);border:2px dashed var(--accent);border-radius:6px;display:none;align-items:center;justify-content:center;font-size:11px;color:var(--accent);pointer-events:none}
@@ -697,7 +698,7 @@ let chatHistory = [];
 let vocab = {
   categorias: ["Vestido","Camiseta","Blusa","Calça","Saia","Casaco","Camisa","Macacão","Acessório","Outros"],
   cores: ["Preto","Branco","Cinza","Vermelho","Rosa","Laranja","Amarelo","Verde","Azul","Roxo","Marrom","Bege","Multicolor","Estampado"],
-  estados: ["Novo","Bom estado","Usado","Velho","Rasgado","Pequeno","Grande","Precisa ajuste","Para doação"],
+  estados: ["Novo","Bom estado","Usado","Velho","Rasgado","Pequeno","Grande","Precisa ajuste","Para doação","Fora de uso"],
   estacoes: ["Verão","Inverno","Outono","Primavera","Meia estação"],
   ocasioes: ["Trabalho","Casual","Noite","Ritual","Viagem","Festa","Conforto","Esporte","Praia"],
   origens: ["Avulsa", "Camisetas", "Diversos_2", "Diversos_3", "Foto IMG", "Lado direito do armário", "Lado esquerdo do armário", "Novas fotos", "Roupas novas", "Roupeiro do meio", "Vestidos_2", "Vestidos_part_1"]
@@ -1143,13 +1144,31 @@ function renderGrid(filtered) {
   });
 }
 
+// Texto pesquisável completo de uma peça: tipo, cor, estampa, obs, categoria, id e TODAS as tags
+function searchableText(item) {
+  const tags = itemTags[item.id] || {};
+  const tagWords = [
+    ...(tags.cores||[]), ...(tags.estados||[]), ...(tags.estacoes||[]),
+    ...(tags.ocasioes||[]), ...(tags.origens||[])
+  ].join(' ');
+  return `${item.id} ${item.tipo} ${item.cor} ${item.estampa} ${item.obs} ${item.cat} ${tagWords}`
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos
+}
+function matchesQuery(item, q) {
+  if (!q) return true;
+  const norm = q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const text = searchableText(item);
+  // cada palavra digitada precisa aparecer em algum lugar (busca AND)
+  return norm.split(/\s+/).filter(Boolean).every(word => text.includes(word));
+}
+
 function filterItems() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   const cat = document.getElementById('catFilter').value;
   const photoF = document.getElementById('photoFilter').value;
   const filtered = wardrobe.filter(i => {
-    const text = `${i.tipo} ${i.cor} ${i.estampa} ${i.obs} ${i.cat}`.toLowerCase();
-    if (q && !text.includes(q)) return false;
+    if (q && !matchesQuery(i, q)) return false;
     if (cat && i.cat !== cat) return false;
     if (photoF === 'com' && !photos[i.id]) return false;
     if (photoF === 'sem' && photos[i.id]) return false;
@@ -1432,9 +1451,8 @@ function renderUpload(filtered) {
 }
 
 function filterUpload() {
-  const q = document.getElementById('uploadSearch').value.toLowerCase();
-  const filtered = wardrobe.filter(i =>
-    !q || `${i.tipo} ${i.cor} ${i.estampa} ${i.cat}`.toLowerCase().includes(q));
+  const q = document.getElementById('uploadSearch').value;
+  const filtered = wardrobe.filter(i => matchesQuery(i, q));
   renderUpload(filtered);
 }
 
@@ -1842,11 +1860,11 @@ function updateBulkPreview() {
 }
 
 function filterBulkGrid() {
-  const q = (document.getElementById('bulkSearch').value || '').toLowerCase();
+  const q = document.getElementById('bulkSearch').value || '';
   const hideWithPhoto = document.getElementById('bulkHideWithPhoto')?.checked;
   let items = wardrobe.filter(i => {
     if (bulkCatFilter && i.cat !== bulkCatFilter) return false;
-    if (q && !`${i.tipo} ${i.cor} ${i.cat} ${i.id}`.toLowerCase().includes(q)) return false;
+    if (!matchesQuery(i, q)) return false;
     if (hideWithPhoto && (photos[i.id] || bulkPending[i.id])) return false;
     return true;
   });
@@ -1855,7 +1873,12 @@ function filterBulkGrid() {
 
 function renderBulkGrid(items) {
   const grid = document.getElementById('bulkGrid');
-  grid.innerHTML = (items || wardrobe).map(item => {
+  const list = items || wardrobe;
+  if (!list.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:13px;padding:30px 16px;line-height:1.6">Nenhuma peça encontrada.<br><span style="font-size:11px">Tente outra busca, troque a categoria ou desmarque "Esconder peças que já têm foto".</span></div>`;
+    return;
+  }
+  grid.innerHTML = list.map(item => {
     const pending = bulkPending[item.id];
     const existing = photos[item.id];
     const hasPhoto = pending || existing;
@@ -1868,8 +1891,9 @@ function renderBulkGrid(items) {
       <div class="bulk-drop-hint">Soltar aqui</div>
       <div class="bthumb">${thumbSrc ? `<img src="${thumbSrc}" alt="">` : '📷'}</div>
       <div class="binfo">
-        <div class="bid">#${item.id}</div>
-        <div class="bname">${item.tipo}</div>
+        <div class="bid">#${item.id} · ${item.cat}</div>
+        <div class="bname" title="${item.tipo} — ${item.cor}">${item.tipo}</div>
+        <div class="bsub">${item.cor}</div>
       </div>
       <div class="bcheck">✓</div>
     </div>`;
