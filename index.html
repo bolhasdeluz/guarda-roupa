@@ -229,7 +229,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 </header>
 <main>
 
-<!-- CATÁLOGO -->
 <div id="catalogo" class="panel active">
   <div class="catalog-header">
     <div class="filter-row">
@@ -262,7 +261,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   <div class="grid" id="itemGrid"></div>
 </div>
 
-<!-- UPLOAD / DADOS -->
 <div id="upload" class="panel">
   <div class="upload-panel">
     <h2 class="section-title">Fotos &amp; Dados</h2>
@@ -282,7 +280,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   </div>
 </div>
 
-<!-- STYLIST -->
 <div id="stylist" class="panel">
   <div class="stylist-layout">
     <div class="stylist-sidebar">
@@ -314,12 +311,10 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 
 </main>
 
-<!-- EDIT / NEW ITEM MODAL -->
 <div class="modal-overlay" id="editModal" style="display:none">
   <div class="modal-box">
     <h3 id="editModalTitle">Editar Peça</h3>
 
-    <!-- FOTOS (2 slots) -->
     <div style="margin-bottom:18px">
       <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px">Fotos</div>
       <div style="display:flex;gap:10px">
@@ -398,7 +393,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   </div>
 </div>
 
-<!-- IMPORT MODAL -->
 <div class="modal-overlay" id="importModal" style="display:none">
   <div class="modal-box">
     <h3>Importar Peças</h3>
@@ -417,7 +411,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   </div>
 </div>
 
-<!-- PDF PROGRESS -->
 <div class="pdf-progress" id="pdfProgress" style="display:none">
   <div class="pdf-progress-box">
     <h3>Gerando PDF</h3>
@@ -426,7 +419,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   </div>
 </div>
 
-<!-- BULK DISTRIBUTOR -->
 <div class="bulk-overlay" id="bulkModal" style="display:none">
   <div class="bulk-header">
     <h3>🗂 Distribuir Fotos em Lote</h3>
@@ -435,14 +427,11 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     <button class="btn-confirm" onclick="saveBulkPhotos()">Salvar tudo</button>
   </div>
   <div class="bulk-body">
-    <!-- Queue of uploaded photos -->
     <div class="bulk-queue">
       <div class="bulk-queue-header">Fotos (<span id="bulkQueueCount">0</span>)</div>
       <div class="bulk-queue-list" id="bulkQueueList"></div>
     </div>
-    <!-- Main area -->
     <div class="bulk-main">
-      <!-- Selected photo preview -->
       <div class="bulk-preview">
         <div class="bulk-preview-placeholder" id="bulkPreviewPlaceholder">
           <span style="font-size:28px">👈</span>
@@ -458,7 +447,6 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
           </div>
         </div>
       </div>
-      <!-- Search + grid of items -->
       <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0">
         <input class="search-input" id="bulkSearch" placeholder="Filtrar peças..." oninput="filterBulkGrid()" style="flex:1;padding:7px 12px;font-size:12px">
         <label class="btn-upload" for="bulkFileInput" style="cursor:pointer;font-size:12px;padding:7px 12px">+ Adicionar fotos</label>
@@ -472,6 +460,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 <div class="toast" id="toast"></div>
 
 <script>
+const CLOUDFLARE_API = "https://api-armario.bolhasdeluz.workers.dev";
+const API_TOKEN = "sua-senha-super-secreta"; // Mantenha igual ao do Worker
+
 // ===================== DADOS BASE =====================
 const BASE_WARDROBE = [
   {id:1,cat:"Outros",tipo:"Peça escura (a confirmar)",cor:"Escuro",estampa:"Lisa/indef.",obs:"Foto borrada, difícil definir"},
@@ -859,51 +850,65 @@ let itemTags = {};
 // Filtros ativos
 let activeFilters = { cores: new Set(), estados: new Set(), estacoes: new Set(), ocasioes: new Set(), origens: new Set() };
 
-function loadState() {
+// FUNÇÕES DE COMUNICAÇÃO COM O CLOUDFLARE
+async function loadState() {
   try {
-    const p = localStorage.getItem('gr_photos'); if (p) photos = JSON.parse(p);
-    const s = localStorage.getItem('gr_selected'); if (s) selectedItems = new Set(JSON.parse(s));
-    const v = localStorage.getItem('gr_vocab');
-    if (v) {
-      const pv = JSON.parse(v);
-      Object.keys(pv).forEach(k => {
-        if (vocab[k]) vocab[k] = [...new Set([...vocab[k], ...pv[k]])];
-        else vocab[k] = pv[k];
-      });
+    const res = await fetch(CLOUDFLARE_API, {
+      method: "GET",
+      headers: { "Authorization": API_TOKEN }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      if (data.photos) photos = data.photos;
+      if (data.selectedItems) selectedItems = new Set(data.selectedItems);
+      if (data.vocab) vocab = data.vocab;
+      if (data.itemTags) itemTags = data.itemTags;
+      if (data.wardrobe) wardrobe = data.wardrobe;
     }
-    const t = localStorage.getItem('gr_tags');
-    if (t) {
-      const saved = JSON.parse(t);
-      // Merge: start from BASE, then overlay saved data
-      itemTags = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
-      Object.keys(saved).forEach(k => {
-        if (!itemTags[k]) itemTags[k] = saved[k];
-        else {
-          // Merge each tag array, keeping saved values and adding any base ones not overridden
-          Object.keys(saved[k]).forEach(field => { itemTags[k][field] = saved[k][field]; });
-        }
-      });
-    } else {
-      itemTags = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
-    }
-    const w = localStorage.getItem('gr_wardrobe');
-    if (w) {
-      const pw = JSON.parse(w);
-      wardrobe = (Array.isArray(pw) && pw.length > 0) ? pw : BASE_WARDROBE.map(i => ({...i}));
-    } else {
-      wardrobe = BASE_WARDROBE.map(i => ({...i}));
-    }
-  } catch(e) {
-    console.warn('loadState error, using defaults:', e);
-    wardrobe = BASE_WARDROBE.map(i => ({...i}));
+  } catch (e) {
+    console.error("Erro ao carregar do Cloudflare:", e);
   }
+
+  // Fallback caso a nuvem esteja vazia ou falhe
   if (!wardrobe || wardrobe.length === 0) wardrobe = BASE_WARDROBE.map(i => ({...i}));
 }
 
-function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+async function saveAllCloud() {
+  const estadoAtual = {
+    photos: photos,
+    selectedItems: [...selectedItems],
+    vocab: vocab,
+    itemTags: itemTags,
+    wardrobe: wardrobe
+  };
+
+  try {
+    const res = await fetch(CLOUDFLARE_API, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": API_TOKEN
+      },
+      body: JSON.stringify(estadoAtual)
+    });
+
+    if (!res.ok) throw new Error("Erro ao salvar");
+    console.log("Sincronizado com a nuvem!");
+  } catch (e) {
+    console.error(e);
+    showToast("Erro ao sincronizar com a nuvem!");
+  }
+}
+
+function save(key, val) { 
+  // O save individual também dispara o saveAllCloud para garantir sincronia em tempo real
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} 
+  saveAllCloud();
+}
+
 function saveAll() {
-  save('gr_photos', photos); save('gr_selected', [...selectedItems]);
-  save('gr_vocab', vocab); save('gr_tags', itemTags); save('gr_wardrobe', wardrobe);
+  saveAllCloud();
 }
 
 // ===================== PANELS =====================
@@ -1794,8 +1799,9 @@ function showToast(msg) {
 }
 
 // ===================== INIT =====================
-document.addEventListener('DOMContentLoaded', function() {
-  loadState();
+document.addEventListener('DOMContentLoaded', async function() {
+  showToast("Sincronizando com a nuvem...");
+  await loadState();
   buildFilterUI();
   renderGrid();
 });
