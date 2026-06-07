@@ -220,6 +220,13 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .bulk-counter{font-size:11px;color:var(--muted);margin-right:auto}
 .bulk-counter strong{color:var(--accent)}
 
+.stylist-photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.sp-card{width:72px;cursor:pointer;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface);transition:border-color .15s}
+.sp-card:hover{border-color:var(--accent)}
+.sp-card img{width:72px;height:72px;object-fit:cover;display:block}
+.sp-noimg{width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted)}
+.sp-label{font-size:9px;color:var(--accent);text-align:center;padding:3px 0;font-weight:600}
+
 /* RESPONSIVE */
 @media(max-width:860px){
   .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
@@ -318,6 +325,17 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
       <div class="sidebar-section">
         <h3>Ocasião</h3>
         <div style="display:flex;flex-wrap:wrap;gap:5px" id="stylistOccBtns"></div>
+      </div>
+      <div class="sidebar-section">
+        <h3>Opções</h3>
+        <label style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="stylistExcludeForaUso" checked style="accent-color:var(--accent);width:16px;height:16px">
+          Ignorar peças "Fora de uso"
+        </label>
+        <label style="font-size:12px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:8px">
+          <input type="checkbox" id="stylistOnlyWithPhoto" style="accent-color:var(--accent);width:16px;height:16px">
+          Só peças com foto
+        </label>
       </div>
       <div class="sidebar-section">
         <h3>Pergunta / Pedido</h3>
@@ -1371,18 +1389,46 @@ function deleteCurrentItem() {
 function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
 
 // slot: 0=principal, 1=extra
-function handleEditPhoto(slot, input) {
+// Comprime/redimensiona uma foto antes de salvar (evita arquivos gigantes que estouram a nuvem)
+// Retorna uma Promise com a dataURL JPEG já reduzida.
+function compressImage(file, maxDim = 1000, quality = 0.72) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        // Redimensiona mantendo proporção, limitando o maior lado a maxDim
+        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+        else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        try {
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        } catch(err) {
+          // fallback: devolve o original se algo der errado
+          resolve(e.target.result);
+        }
+      };
+      img.onerror = () => resolve(e.target.result); // ex: HEIC que o canvas não abre — usa original
+      img.src = e.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleEditPhoto(slot, input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const thumb = document.getElementById('editThumb' + slot);
-    thumb.style.border = '1px solid var(--accent)';
-    thumb.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
-    thumb._pending = e.target.result;
-    thumb._remove = false;
-    document.getElementById('editRemoveBtn' + slot).style.display = 'inline-flex';
-  };
-  reader.readAsDataURL(file);
+  const dataUrl = await compressImage(file);
+  const thumb = document.getElementById('editThumb' + slot);
+  thumb.style.border = '1px solid var(--accent)';
+  thumb.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover">`;
+  thumb._pending = dataUrl;
+  thumb._remove = false;
+  document.getElementById('editRemoveBtn' + slot).style.display = 'inline-flex';
 }
 
 function removeEditPhoto(slot) {
@@ -1456,16 +1502,16 @@ function filterUpload() {
   renderUpload(filtered);
 }
 
-function handlePhoto(id, input) {
+async function handlePhoto(id, input) {
   const file = input.files[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    photos[id] = e.target.result;
-    save('gr_photos', photos);
-    renderUpload(); renderGrid();
-    showToast(`Foto da peça #${id} salva!`);
-  };
-  reader.readAsDataURL(file);
+  const dataUrl = await compressImage(file);
+  // preserva foto extra (slot 1) se já existir
+  const cur = photos[id];
+  if (Array.isArray(cur) && cur[1]) photos[id] = [dataUrl, cur[1]];
+  else photos[id] = dataUrl;
+  save('gr_photos', photos);
+  renderUpload(); renderGrid();
+  showToast(`Foto da peça #${id} salva!`);
 }
 
 function removePhoto(id) {
@@ -1511,7 +1557,15 @@ async function askStylist() {
   const btn = document.getElementById('askBtn');
   btn.disabled = true; btn.textContent = 'Consultando...';
 
-  const wardrobeCtx = wardrobe.map(i => {
+  const excludeForaUso = document.getElementById('stylistExcludeForaUso')?.checked;
+  const onlyWithPhoto = document.getElementById('stylistOnlyWithPhoto')?.checked;
+  const stylistWardrobe = wardrobe.filter(i => {
+    const tags = itemTags[i.id] || {};
+    if (excludeForaUso && (tags.estados || []).includes('Fora de uso')) return false;
+    if (onlyWithPhoto && !photos[i.id]) return false;
+    return true;
+  });
+  const wardrobeCtx = stylistWardrobe.map(i => {
     const tags = itemTags[i.id] || {};
     const tagStr = [
       ...(tags.estados || []), ...(tags.estacoes || []), ...(tags.ocasioes || []), ...(tags.origens || [])
@@ -1523,7 +1577,7 @@ async function askStylist() {
   const occCtx = occasions.length ? `\nOcasião: ${occasions.join(', ')}` : '';
   const userQ = prompt || `Monte sugestões de look${occCtx}`;
 
-  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}\n\nRegras: responda em PT-BR direto e prático, referencie peças por #ID e nome, não invente peças.`;
+  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima.`;
 
   addMessage('user', `${occCtx ? 'Ocasião: '+occasions.join(', ')+'\n' : ''}${userQ}`);
   document.getElementById('userPrompt').value = '';
@@ -1542,7 +1596,7 @@ async function askStylist() {
     const reply = data.content?.find(b=>b.type==='text')?.text || (typeof data.reply==='string'?data.reply:'Sem resposta.');
     chatHistory.push({role:'user',content:userQ},{role:'assistant',content:reply});
     if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
-    addMessage('assistant', reply);
+    addMessage('assistant', reply, true);
   } catch(e) {
     removeTyping(typingId);
     addMessage('assistant','Não consegui falar com o Stylist. Confira se o endpoint /stylist está configurado no seu Worker do Cloudflare. (Detalhe: '+e.message+')');
@@ -1550,13 +1604,30 @@ async function askStylist() {
   btn.disabled = false; btn.textContent = 'Perguntar ao Stylist →';
 }
 
-function addMessage(role, text) {
+function addMessage(role, text, showPhotos) {
   const msgs = document.getElementById('chatMessages');
   msgs.querySelector('.empty-chat')?.remove();
   const div = document.createElement('div');
   div.className = `message ${role}`;
-  div.innerHTML = `<div class="message-label">${role==='user'?'Você':'✦ Stylist'}</div>
+  let html = `<div class="message-label">${role==='user'?'Você':'✦ Stylist'}</div>
     <div class="message-bubble">${text.replace(/\n/g,'<br>')}</div>`;
+
+  // Mostra miniaturas das peças citadas (#ID) na resposta do Stylist
+  if (showPhotos) {
+    const ids = [...new Set((text.match(/#(\d+)/g) || []).map(m => Number(m.slice(1))))];
+    const cited = ids.map(id => wardrobe.find(i => i.id === id)).filter(Boolean);
+    if (cited.length) {
+      html += '<div class="stylist-photos">' + cited.map(item => {
+        const p = photos[item.id];
+        const src = p ? (Array.isArray(p) ? p[0] : p) : null;
+        return `<div class="sp-card" onclick="openEditModal(${item.id})" title="${item.tipo} — ${item.cor}">
+          ${src ? `<img src="${src}" alt="">` : `<div class="sp-noimg">📷</div>`}
+          <div class="sp-label">#${item.id}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+  }
+  div.innerHTML = html;
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -1797,23 +1868,20 @@ function closeBulkModal() {
   document.getElementById('bulkModal').style.display = 'none';
 }
 
-function loadBulkFiles(input) {
+async function loadBulkFiles(input) {
   const files = Array.from(input.files);
-  let loaded = 0;
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      bulkQueue.push({ dataUrl: e.target.result, name: file.name, usedFor: null });
-      loaded++;
-      if (loaded === files.length) {
-        if (bulkSelected === null && bulkQueue.length > 0) bulkSelected = 0;
-        renderBulkQueue();
-        updateBulkPreview();
-        updateBulkCounter();
-      }
-    };
-    reader.readAsDataURL(file);
-  });
+  if (!files.length) return;
+  showToast('Processando '+files.length+' foto(s)...');
+  for (const file of files) {
+    try {
+      const dataUrl = await compressImage(file);
+      bulkQueue.push({ dataUrl, name: file.name, usedFor: null });
+    } catch(e) { console.warn('Falha ao processar', file.name, e); }
+  }
+  if (bulkSelected === null && bulkQueue.length > 0) bulkSelected = 0;
+  renderBulkQueue();
+  updateBulkPreview();
+  updateBulkCounter();
   input.value = '';
 }
 
