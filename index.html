@@ -42,8 +42,11 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 
 /* CHIP FILTERS (cor / ocasião / estado / estação) */
 .chip-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+@media(max-width:860px){.chip-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}.chip-row::-webkit-scrollbar{display:none}.chip-label{position:sticky;left:0;background:var(--bg);padding-right:4px;z-index:1}}
 .chip-label{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-right:2px}
-.chip{font-size:11px;padding:4px 11px;border-radius:14px;background:var(--tag-bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap}
+.chip{font-size:12px;padding:7px 14px;border-radius:16px;background:var(--tag-bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.chip.on{padding-right:26px;position:relative}
+.chip.on::after{content:'✕';position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:9px;opacity:.7}
 .chip:hover,.chip.on{background:#241f14;border-color:var(--accent);color:var(--accent)}
 .chip-add{font-size:16px;padding:2px 8px;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;border-radius:14px;font-family:'DM Sans',sans-serif;transition:all .15s;line-height:1.4}
 .chip-add:hover{border-color:var(--accent);color:var(--accent)}
@@ -178,9 +181,12 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .empty-chat .icon{font-size:32px;opacity:.4}
 .empty-chat p{font-size:13px;max-width:260px;line-height:1.6}
 
+
 /* ── BULK DISTRIBUTOR ── */
-.bulk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:500;display:flex;flex-direction:column}
-.bulk-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--bg)}
+.bulk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:500;display:flex;flex-direction:column;height:100vh;height:100dvh}
+.bulk-header{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--bg);flex-wrap:wrap}
+.bulk-header h3{font-size:15px!important}
+@media(max-width:860px){.bulk-header h3{font-size:14px!important;width:100%;margin-bottom:4px}.bulk-counter{order:3;width:100%}}
 .bulk-header h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--accent2);flex:1}
 .bulk-body{display:flex;flex:1;overflow:hidden;gap:0}
 .bulk-queue{width:160px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
@@ -214,12 +220,28 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .bulk-counter strong{color:var(--accent)}
 
 /* RESPONSIVE */
-@media(max-width:860px){.stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}header{padding:14px}nav button{font-size:11px;padding:5px 10px}}
+@media(max-width:860px){
+  .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
+  header{padding:14px}nav button{font-size:11px;padding:5px 10px}
+  /* Bulk: empilha verticalmente */
+  .bulk-body{flex-direction:column}
+  .bulk-queue{width:100%;flex-direction:row;border-right:none;border-bottom:1px solid var(--border);max-height:120px;flex-shrink:0}
+  .bulk-queue-header{writing-mode:horizontal-tb;border-bottom:none;border-right:1px solid var(--border);display:flex;align-items:center;white-space:nowrap;flex-shrink:0}
+  .bulk-queue-list{flex-direction:row;overflow-x:auto;overflow-y:hidden;flex:1}
+  .bulk-q-thumb{width:80px;height:80px;flex-shrink:0}
+  .bulk-preview{flex-direction:column;gap:8px;padding:10px}
+  .bulk-preview-img,.bulk-preview-placeholder{width:90px;height:90px}
+  .bulk-preview-info{font-size:11px}
+  .bulk-grid{grid-template-columns:repeat(auto-fill,minmax(85px,1fr))}
+}
 </style>
 </head>
 <body>
 <header>
-  <div class="logo">Guarda-Roupa <span>· Anna</span></div>
+  <div style="display:flex;flex-direction:column;gap:2px">
+    <div class="logo">Guarda-Roupa <span>· Anna</span></div>
+    <div id="syncStatus" style="font-size:9px;color:var(--muted);letter-spacing:.03em"></div>
+  </div>
   <nav>
     <button class="active" onclick="showPanel('catalogo',this)">Catálogo</button>
     <button onclick="showPanel('upload',this)">Fotos &amp; Dados</button>
@@ -458,10 +480,17 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
         </div>
       </div>
       <!-- Search + grid of items -->
-      <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0">
-        <input class="search-input" id="bulkSearch" placeholder="Filtrar peças..." oninput="filterBulkGrid()" style="flex:1;padding:7px 12px;font-size:12px">
-        <label class="btn-upload" for="bulkFileInput" style="cursor:pointer;font-size:12px;padding:7px 12px">+ Adicionar fotos</label>
-        <input type="file" id="bulkFileInput" accept="image/*" multiple style="display:none" onchange="loadBulkFiles(this)">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+        <div style="display:flex;gap:8px;align-items:center">
+          <input class="search-input" id="bulkSearch" placeholder="Filtrar peças..." oninput="filterBulkGrid()" style="flex:1;padding:7px 12px;font-size:12px">
+          <label class="btn-upload" for="bulkFileInput" style="cursor:pointer;font-size:12px;padding:7px 12px;white-space:nowrap">+ Fotos</label>
+          <input type="file" id="bulkFileInput" accept="image/*" multiple style="display:none" onchange="loadBulkFiles(this)">
+        </div>
+        <div class="chip-row" id="bulkCatChips" style="gap:5px"></div>
+        <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="bulkHideWithPhoto" onchange="filterBulkGrid()" style="accent-color:var(--accent)">
+          Esconder peças que já têm foto
+        </label>
       </div>
       <div class="bulk-grid" id="bulkGrid"></div>
     </div>
@@ -471,8 +500,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 <div class="toast" id="toast"></div>
 
 <script>
+// ===================== CONFIG NUVEM =====================
 const CLOUDFLARE_API = "https://api-armario.bolhasdeluz.workers.dev";
-const API_TOKEN = "sua-senha-super-secreta"; // Mantenha igual ao do Worker
+const API_TOKEN = "sua-senha-super-secreta"; // deve ser igual à do Worker
 
 // ===================== DADOS BASE =====================
 const BASE_WARDROBE = [
@@ -861,91 +891,149 @@ let itemTags = {};
 // Filtros ativos
 let activeFilters = { cores: new Set(), estados: new Set(), estacoes: new Set(), ocasioes: new Set(), origens: new Set() };
 
-// FUNÇÕES DE COMUNICAÇÃO COM O CLOUDFLARE
-async function loadState() {
+// Carrega estado local imediatamente (rápido, sem esperar rede)
+function loadLocal() {
   try {
-    const res = await fetch(CLOUDFLARE_API, {
-      method: "GET",
-      headers: { "Authorization": API_TOKEN }
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      if (data.photos) photos = data.photos;
-      if (data.selectedItems) selectedItems = new Set(data.selectedItems);
-      if (data.vocab) vocab = data.vocab;
-      if (data.itemTags) itemTags = data.itemTags;
-      if (data.wardrobe) wardrobe = data.wardrobe;
+    const p = localStorage.getItem('gr_photos'); if (p) photos = JSON.parse(p);
+    const s = localStorage.getItem('gr_selected'); if (s) selectedItems = new Set(JSON.parse(s));
+    const v = localStorage.getItem('gr_vocab');
+    if (v) {
+      const pv = JSON.parse(v);
+      Object.keys(pv).forEach(k => {
+        if (vocab[k]) vocab[k] = [...new Set([...vocab[k], ...pv[k]])];
+        else vocab[k] = pv[k];
+      });
     }
-  } catch (e) {
-    console.error("Erro ao carregar do Cloudflare:", e);
-  }
-
-  // Fallback caso a nuvem esteja vazia ou falhe
+    const t = localStorage.getItem('gr_tags');
+    itemTags = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
+    if (t) {
+      const saved = JSON.parse(t);
+      Object.keys(saved).forEach(k => {
+        if (!itemTags[k]) itemTags[k] = saved[k];
+        else Object.keys(saved[k]).forEach(field => { itemTags[k][field] = saved[k][field]; });
+      });
+    }
+    const w = localStorage.getItem('gr_wardrobe');
+    if (w) {
+      const pw = JSON.parse(w);
+      if (Array.isArray(pw) && pw.length > 0) wardrobe = pw;
+    }
+  } catch(e) { console.warn('loadLocal error:', e); }
   if (!wardrobe || wardrobe.length === 0) wardrobe = BASE_WARDROBE.map(i => ({...i}));
 }
 
-async function saveAllCloud() {
-  const estadoAtual = {
-    photos: photos,
-    selectedItems: [...selectedItems],
-    vocab: vocab,
-    itemTags: itemTags,
-    wardrobe: wardrobe
-  };
+// Tenta carregar da nuvem (sobrescreve local se a nuvem tiver dados mais completos)
+async function loadCloud() {
+  try {
+    updateSyncStatus('loading');
+    const res = await fetch(CLOUDFLARE_API, {
+      method: 'GET',
+      headers: { 'Authorization': API_TOKEN }
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data && (data.wardrobe || data.photos || data.itemTags)) {
+      if (data.photos) photos = data.photos;
+      if (data.selectedItems) selectedItems = new Set(data.selectedItems);
+      if (data.vocab) {
+        Object.keys(data.vocab).forEach(k => {
+          if (vocab[k]) vocab[k] = [...new Set([...vocab[k], ...data.vocab[k]])];
+          else vocab[k] = data.vocab[k];
+        });
+      }
+      if (data.itemTags) {
+        // Merge cloud tags over BASE
+        const merged = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
+        Object.keys(data.itemTags).forEach(k => {
+          if (!merged[k]) merged[k] = data.itemTags[k];
+          else Object.keys(data.itemTags[k]).forEach(f => { merged[k][f] = data.itemTags[k][f]; });
+        });
+        itemTags = merged;
+      }
+      if (data.wardrobe && Array.isArray(data.wardrobe) && data.wardrobe.length > 0) wardrobe = data.wardrobe;
+      // Persiste a cópia da nuvem localmente
+      try {
+        localStorage.setItem('gr_photos', JSON.stringify(photos));
+        localStorage.setItem('gr_selected', JSON.stringify([...selectedItems]));
+        localStorage.setItem('gr_vocab', JSON.stringify(vocab));
+        localStorage.setItem('gr_tags', JSON.stringify(itemTags));
+        localStorage.setItem('gr_wardrobe', JSON.stringify(wardrobe));
+      } catch(e) {}
+      updateSyncStatus('ok');
+      return true;
+    }
+    updateSyncStatus('ok');
+  } catch(e) {
+    console.warn('loadCloud falhou (usando dados locais):', e);
+    updateSyncStatus('error');
+  }
+  return false;
+}
 
+// Salva localmente NA HORA (offline-safe) e sincroniza com a nuvem em background (debounced)
+function save(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+  scheduleCloudSync();
+}
+function saveAll() {
+  // Persiste tudo no localStorage imediatamente
+  try {
+    localStorage.setItem('gr_photos', JSON.stringify(photos));
+    localStorage.setItem('gr_selected', JSON.stringify([...selectedItems]));
+    localStorage.setItem('gr_vocab', JSON.stringify(vocab));
+    localStorage.setItem('gr_tags', JSON.stringify(itemTags));
+    localStorage.setItem('gr_wardrobe', JSON.stringify(wardrobe));
+  } catch(e) { console.warn('localStorage cheio?', e); }
+  scheduleCloudSync();
+}
+
+// Debounce do sync na nuvem — evita disparar a cada tecla
+let cloudSyncTimer = null;
+let cloudSyncing = false;
+function scheduleCloudSync() {
+  if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
+  cloudSyncTimer = setTimeout(doCloudSync, 1500);
+  updateSyncStatus('pending');
+}
+
+async function doCloudSync() {
+  if (cloudSyncing) { scheduleCloudSync(); return; }
+  cloudSyncing = true;
+  updateSyncStatus('saving');
+  const estado = {
+    photos, selectedItems: [...selectedItems], vocab, itemTags, wardrobe,
+    savedAt: new Date().toISOString()
+  };
   try {
     const res = await fetch(CLOUDFLARE_API, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": API_TOKEN
-      },
-      body: JSON.stringify(estadoAtual)
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'Authorization': API_TOKEN },
+      body: JSON.stringify(estado)
     });
-
-    if (!res.ok) throw new Error("Erro ao salvar");
-    console.log("Sincronizado com a nuvem!");
-  } catch (e) {
-    console.error(e);
-    showToast("Erro ao sincronizar com a nuvem!");
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    updateSyncStatus('ok');
+  } catch(e) {
+    console.warn('Sync nuvem falhou (dados salvos localmente):', e);
+    updateSyncStatus('error');
+  } finally {
+    cloudSyncing = false;
   }
 }
 
-function save(key, val) { 
-  // O save individual também dispara o saveAllCloud para garantir sincronia em tempo real
-  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} 
-  saveAllCloud();
-}
-
-function saveAll() {
-  saveAllCloud();
-}
-
-// --- FUNÇÃO DE COMPRESSÃO DE FOTOS ---
-function compressImage(src, callback) {
-  const img = new Image();
-  img.onload = () => {
-    const canvas = document.createElement('canvas');
-    const MAX_WIDTH = 600; // Redimensiona para no máximo 600px de largura
-    let w = img.width, h = img.height;
-    
-    if (w > MAX_WIDTH) {
-      h = Math.round((MAX_WIDTH / w) * h);
-      w = MAX_WIDTH;
-    }
-    
-    canvas.width = w; 
-    canvas.height = h;
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0, w, h);
-    
-    // Converte para JPEG com 70% de qualidade
-    callback(canvas.toDataURL('image/jpeg', 0.7));
+function updateSyncStatus(state) {
+  const el = document.getElementById('syncStatus');
+  if (!el) return;
+  const map = {
+    pending: ['● salvando…', 'var(--muted)'],
+    saving:  ['● sincronizando…', 'var(--accent)'],
+    ok:      ['✓ salvo na nuvem', 'var(--green)'],
+    error:   ['⚠ salvo só no aparelho', '#c0a060'],
+    loading: ['● carregando…', 'var(--accent)'],
   };
-  img.src = src;
+  const [txt, color] = map[state] || ['', 'var(--muted)'];
+  el.textContent = txt;
+  el.style.color = color;
 }
-
 
 // ===================== PANELS =====================
 function showPanel(id, btn) {
@@ -960,10 +1048,11 @@ function showPanel(id, btn) {
 
 // ===================== FILTER UI =====================
 function buildFilterUI() {
-  // Category select
+  // Category select — preserva a seleção atual
   const catSel = document.getElementById('catFilter');
+  const prevCat = catSel.value;
   catSel.innerHTML = '<option value="">Todas categorias</option>' +
-    vocab.categorias.map(c => `<option>${c}</option>`).join('');
+    vocab.categorias.map(c => `<option${c===prevCat?' selected':''}>${c}</option>`).join('');
 
   buildChipRow('corChips', 'cores');
   buildChipRow('estadoChips', 'estados');
@@ -1243,7 +1332,7 @@ function saveEditModal() {
   saveAll();
   closeEditModal();
   buildFilterUI();
-  renderGrid();
+  filterItems();   // re-aplica filtros ativos em vez de mostrar tudo
   showToast(editingId ? 'Peça atualizada!' : 'Peça adicionada!');
 }
 
@@ -1256,7 +1345,7 @@ function deleteCurrentItem() {
   saveAll();
   closeEditModal();
   buildFilterUI();
-  renderGrid();
+  filterItems();
   showToast('Peça excluída');
 }
 
@@ -1267,14 +1356,12 @@ function handleEditPhoto(slot, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    compressImage(e.target.result, (compressed) => {
-      const thumb = document.getElementById('editThumb' + slot);
-      thumb.style.border = '1px solid var(--accent)';
-      thumb.innerHTML = `<img src="${compressed}" style="width:100%;height:100%;object-fit:cover">`;
-      thumb._pending = compressed;
-      thumb._remove = false;
-      document.getElementById('editRemoveBtn' + slot).style.display = 'inline-flex';
-    });
+    const thumb = document.getElementById('editThumb' + slot);
+    thumb.style.border = '1px solid var(--accent)';
+    thumb.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+    thumb._pending = e.target.result;
+    thumb._remove = false;
+    document.getElementById('editRemoveBtn' + slot).style.display = 'inline-flex';
   };
   reader.readAsDataURL(file);
 }
@@ -1355,12 +1442,10 @@ function handlePhoto(id, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    compressImage(e.target.result, (compressed) => {
-      photos[id] = compressed;
-      save('gr_photos', photos);
-      renderUpload(); renderGrid();
-      showToast(`Foto da peça #${id} salva!`);
-    });
+    photos[id] = e.target.result;
+    save('gr_photos', photos);
+    renderUpload(); renderGrid();
+    showToast(`Foto da peça #${id} salva!`);
   };
   reader.readAsDataURL(file);
 }
@@ -1426,20 +1511,23 @@ async function askStylist() {
   document.getElementById('userPrompt').value = '';
   const typingId = addTyping();
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+    // Roteia pelo seu Cloudflare Worker (a chave da API fica segura no Worker, não no navegador)
+    const resp = await fetch(CLOUDFLARE_API + '/stylist', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':API_TOKEN},
       body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system,
         messages: [...chatHistory, {role:'user',content:userQ}] })
     });
     removeTyping(typingId);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const data = await resp.json();
-    const reply = data.content?.find(b=>b.type==='text')?.text || 'Erro na resposta.';
+    const reply = data.content?.find(b=>b.type==='text')?.text || (typeof data.reply==='string'?data.reply:'Sem resposta.');
     chatHistory.push({role:'user',content:userQ},{role:'assistant',content:reply});
     if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
     addMessage('assistant', reply);
   } catch(e) {
     removeTyping(typingId);
-    addMessage('assistant','Erro de conexão. Verifique se está no claude.ai e tente novamente.');
+    addMessage('assistant','Não consegui falar com o Stylist. Confira se o endpoint /stylist está configurado no seu Worker do Cloudflare. (Detalhe: '+e.message+')');
   }
   btn.disabled = false; btn.textContent = 'Perguntar ao Stylist →';
 }
@@ -1659,12 +1747,32 @@ let bulkQueue = [];       // [{dataUrl, name, usedFor: null}]
 let bulkSelected = null;  // index into bulkQueue
 let bulkPending = {};     // {itemId: {slot:0|1, dataUrl}}
 
+let bulkCatFilter = '';
 function openBulkModal() {
-  bulkQueue = []; bulkSelected = null; bulkPending = {};
+  bulkQueue = []; bulkSelected = null; bulkPending = {}; bulkCatFilter = '';
+  buildBulkCatChips();
   renderBulkQueue();
   filterBulkGrid();
   document.getElementById('bulkModal').style.display = 'flex';
   updateBulkCounter();
+}
+
+function buildBulkCatChips() {
+  const row = document.getElementById('bulkCatChips');
+  const cats = ['Todas', ...vocab.categorias];
+  row.innerHTML = '';
+  cats.forEach(cat => {
+    const btn = document.createElement('button');
+    const val = cat === 'Todas' ? '' : cat;
+    btn.className = 'chip' + (bulkCatFilter === val ? ' on' : '');
+    btn.textContent = cat;
+    btn.onclick = () => {
+      bulkCatFilter = val;
+      buildBulkCatChips();
+      filterBulkGrid();
+    };
+    row.appendChild(btn);
+  });
 }
 
 function closeBulkModal() {
@@ -1677,16 +1785,14 @@ function loadBulkFiles(input) {
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
-      compressImage(e.target.result, (compressed) => {
-        bulkQueue.push({ dataUrl: compressed, name: file.name, usedFor: null });
-        loaded++;
-        if (loaded === files.length) {
-          if (bulkSelected === null && bulkQueue.length > 0) bulkSelected = 0;
-          renderBulkQueue();
-          updateBulkPreview();
-          updateBulkCounter();
-        }
-      });
+      bulkQueue.push({ dataUrl: e.target.result, name: file.name, usedFor: null });
+      loaded++;
+      if (loaded === files.length) {
+        if (bulkSelected === null && bulkQueue.length > 0) bulkSelected = 0;
+        renderBulkQueue();
+        updateBulkPreview();
+        updateBulkCounter();
+      }
     };
     reader.readAsDataURL(file);
   });
@@ -1737,7 +1843,13 @@ function updateBulkPreview() {
 
 function filterBulkGrid() {
   const q = (document.getElementById('bulkSearch').value || '').toLowerCase();
-  const items = q ? wardrobe.filter(i => `${i.tipo} ${i.cor} ${i.cat} ${i.id}`.toLowerCase().includes(q)) : wardrobe;
+  const hideWithPhoto = document.getElementById('bulkHideWithPhoto')?.checked;
+  let items = wardrobe.filter(i => {
+    if (bulkCatFilter && i.cat !== bulkCatFilter) return false;
+    if (q && !`${i.tipo} ${i.cor} ${i.cat} ${i.id}`.toLowerCase().includes(q)) return false;
+    if (hideWithPhoto && (photos[i.id] || bulkPending[i.id])) return false;
+    return true;
+  });
   renderBulkGrid(items);
 }
 
@@ -1842,10 +1954,18 @@ function showToast(msg) {
 
 // ===================== INIT =====================
 document.addEventListener('DOMContentLoaded', async function() {
-  showToast("Sincronizando com a nuvem...");
-  await loadState();
+  loadLocal();          // instantâneo, do aparelho
   buildFilterUI();
   renderGrid();
+  // Tenta puxar da nuvem em background e re-renderiza se vier algo
+  const got = await loadCloud();
+  if (got) { buildFilterUI(); renderGrid(); if(document.getElementById('upload').classList.contains('active')) renderUpload(); }
+});
+
+// Salva ao sair/trocar de app (mobile) pra não perder nada
+window.addEventListener('beforeunload', () => { try { doCloudSync(); } catch(e){} });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { try { doCloudSync(); } catch(e){} }
 });
 </script>
 </body>
