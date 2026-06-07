@@ -227,6 +227,24 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .sp-noimg{width:72px;height:72px;display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted)}
 .sp-label{font-size:9px;color:var(--accent);text-align:center;padding:3px 0;font-weight:600}
 
+.look-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+.look-head{display:flex;gap:12px;align-items:flex-start;margin-bottom:10px}
+.look-head > div:first-child{flex:1;min-width:0}
+.look-num{font-size:10px;color:var(--accent);font-weight:600;letter-spacing:.05em}
+.look-name{font-size:15px;color:var(--text);font-weight:500;margin-top:2px;font-family:'Playfair Display',serif}
+.look-occ{font-size:11px;color:var(--muted);margin-top:3px}
+.look-photo{width:64px;height:64px;border-radius:10px;object-fit:cover;cursor:pointer;border:1px solid var(--accent);flex-shrink:0}
+.look-pieces{display:flex;flex-wrap:wrap;gap:8px}
+.look-piece{width:60px;cursor:pointer;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface);position:relative}
+.look-piece img{width:60px;height:60px;object-fit:cover;display:block}
+.lp-noimg{width:60px;height:60px;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--muted)}
+.lp-id{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);font-size:8px;color:var(--accent);text-align:center;padding:1px 0}
+.look-notas{margin-top:10px;font-size:12px;color:var(--muted);font-style:italic;border-left:2px solid var(--border);padding-left:10px}
+.look-search-row{display:flex;align-items:center;gap:8px;padding:6px;border-radius:8px;background:var(--surface);border:1px solid var(--border);cursor:pointer;transition:border-color .15s}
+.look-search-row:hover{border-color:var(--accent)}
+.lsr-thumb{width:38px;height:38px;border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:14px}
+.lsr-thumb img{width:100%;height:100%;object-fit:cover}
+
 /* RESPONSIVE */
 @media(max-width:860px){
   .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
@@ -254,6 +272,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     <button class="active" onclick="showPanel('catalogo',this)">Catálogo</button>
     <button onclick="showPanel('upload',this)">Fotos &amp; Dados</button>
     <button onclick="showPanel('stylist',this)">Stylist IA</button>
+    <button onclick="showPanel('looks',this)">Looks</button>
   </nav>
 </header>
 <main>
@@ -352,7 +371,68 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   </div>
 </div>
 
+<!-- LOOKS -->
+<div id="looks" class="panel">
+  <div style="padding-top:24px;max-width:900px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+      <h2 class="section-title" style="margin:0">Meus Looks</h2>
+      <button class="btn-tool primary" onclick="openLookModal()" style="margin-left:auto">＋ Montar look</button>
+    </div>
+    <p class="section-sub">Histórico de combinações. O Stylist consulta esses looks para não repetir e citar quando uma sugestão for parecida.</p>
+    <div id="looksList"></div>
+  </div>
+</div>
+
 </main>
+
+<!-- LOOK MODAL (montar/editar) -->
+<div class="modal-overlay" id="lookModal" style="display:none">
+  <div class="modal-box">
+    <h3 id="lookModalTitle">Montar Look</h3>
+    <div class="modal-grid full">
+      <div>
+        <div class="field-label">Nome do look</div>
+        <input class="field-input" id="lookNome" placeholder="Ex: Evento cultural noite">
+      </div>
+    </div>
+    <div class="modal-grid full">
+      <div>
+        <div class="field-label">Ocasião</div>
+        <input class="field-input" id="lookOcasiao" placeholder="Ex: Ritual, Trabalho, Festa...">
+      </div>
+    </div>
+    <div class="section-divider">Peças do look</div>
+    <input class="search-input" id="lookPieceSearch" placeholder="Buscar peça para adicionar..." oninput="renderLookPieceSearch()" style="width:100%;margin-bottom:8px">
+    <div id="lookPieceResults" style="max-height:160px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:10px"></div>
+    <div class="field-label">Selecionadas</div>
+    <div id="lookSelectedPieces" class="chip-row" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:40px"></div>
+
+    <div class="section-divider">Foto do look (você usando)</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <label for="lookPhotoInput" id="lookPhotoThumb" style="width:80px;height:80px;border-radius:10px;border:1px dashed var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0">
+        <span style="font-size:24px">📷</span>
+      </label>
+      <input type="file" id="lookPhotoInput" accept="image/*" style="display:none" onchange="handleLookPhoto(this)">
+      <div style="flex:1">
+        <button class="btn-upload" onclick="document.getElementById('lookPhotoInput').click()" style="font-size:12px;padding:7px 12px">📷 Adicionar foto do look</button>
+        <button class="btn-upload" id="lookPhotoRemove" onclick="removeLookPhoto()" style="font-size:12px;padding:7px 12px;color:var(--red);border-color:var(--red);display:none;margin-top:6px">✕ Remover</button>
+      </div>
+    </div>
+
+    <div class="modal-grid full" style="margin-top:14px">
+      <div>
+        <div class="field-label">Notas (opcional)</div>
+        <input class="field-input" id="lookNotas" placeholder="Como ficou, o que achou...">
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-danger" id="lookDeleteBtn" onclick="deleteCurrentLook()" style="display:none">🗑 Excluir</button>
+      <button class="btn-cancel" onclick="closeLookModal()">Cancelar</button>
+      <button class="btn-confirm" onclick="saveLook()">Salvar look</button>
+    </div>
+  </div>
+</div>
 
 <!-- EDIT / NEW ITEM MODAL -->
 <div class="modal-overlay" id="editModal" style="display:none">
@@ -383,6 +463,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
           Toque em cada slot para escolher a foto. A <em>Principal</em> aparece no catálogo.
         </div>
       </div>
+      <button class="btn-tool primary" id="iaIdentifyBtn" onclick="identificarComIA()" style="margin-top:10px;width:100%;justify-content:center">✨ Identificar peça com IA (pela foto principal)</button>
     </div>
 
     <div class="modal-grid">
@@ -711,6 +792,7 @@ let wardrobe = [];
 let photos = {};
 let selectedItems = new Set();
 let chatHistory = [];
+let looks = [];  // histórico de looks: {id, nome, ids:[...], ocasiao, notas, foto, criadoEm}
 
 // Vocabulários editáveis
 let vocab = {
@@ -937,6 +1019,8 @@ function loadLocal() {
       const pw = JSON.parse(w);
       if (Array.isArray(pw) && pw.length > 0) wardrobe = pw;
     }
+    const lk = localStorage.getItem('gr_looks');
+    if (lk) { const pl = JSON.parse(lk); if (Array.isArray(pl)) looks = pl; }
   } catch(e) { console.warn('loadLocal error:', e); }
   if (!wardrobe || wardrobe.length === 0) wardrobe = BASE_WARDROBE.map(i => ({...i}));
 }
@@ -970,6 +1054,7 @@ async function loadCloud() {
         itemTags = merged;
       }
       if (data.wardrobe && Array.isArray(data.wardrobe) && data.wardrobe.length > 0) wardrobe = data.wardrobe;
+      if (data.looks && Array.isArray(data.looks)) looks = data.looks;
       // Persiste a cópia da nuvem localmente
       try {
         localStorage.setItem('gr_photos', JSON.stringify(photos));
@@ -977,6 +1062,7 @@ async function loadCloud() {
         localStorage.setItem('gr_vocab', JSON.stringify(vocab));
         localStorage.setItem('gr_tags', JSON.stringify(itemTags));
         localStorage.setItem('gr_wardrobe', JSON.stringify(wardrobe));
+        localStorage.setItem('gr_looks', JSON.stringify(looks));
       } catch(e) {}
       updateSyncStatus('ok');
       return true;
@@ -1002,6 +1088,7 @@ function saveAll() {
     localStorage.setItem('gr_vocab', JSON.stringify(vocab));
     localStorage.setItem('gr_tags', JSON.stringify(itemTags));
     localStorage.setItem('gr_wardrobe', JSON.stringify(wardrobe));
+    localStorage.setItem('gr_looks', JSON.stringify(looks));
   } catch(e) { console.warn('localStorage cheio?', e); }
   scheduleCloudSync();
 }
@@ -1027,7 +1114,7 @@ async function doCloudSync() {
   cloudSyncing = true;
   updateSyncStatus('saving');
   const estado = {
-    photos, selectedItems: [...selectedItems], vocab, itemTags, wardrobe,
+    photos, selectedItems: [...selectedItems], vocab, itemTags, wardrobe, looks,
     savedAt: new Date().toISOString()
   };
   const payload = JSON.stringify(estado);
@@ -1077,6 +1164,7 @@ function showPanel(id, btn) {
   if (id === 'catalogo') { buildFilterUI(); renderGrid(); }
   if (id === 'upload') renderUpload();
   if (id === 'stylist') { renderSelectedPanel(); buildStylistOcc(); }
+  if (id === 'looks') renderLooks();
 }
 
 // ===================== FILTER UI =====================
@@ -1593,7 +1681,14 @@ async function askStylist() {
   const occCtx = occasions.length ? `\nOcasião: ${occasions.join(', ')}` : '';
   const userQ = prompt || `Monte sugestões de look${occCtx}`;
 
-  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima.`;
+  // Histórico de looks já montados (pra IA não repetir e citar quando parecido)
+  const looksCtx = looks.length
+    ? '\n\nLooks já registrados no histórico:\n' + looks.map(l =>
+        `Look #${l.id}${l.nome?' ('+l.nome+')':''}${l.ocasiao?' ['+l.ocasiao+']':''}: peças ${(l.ids||[]).map(id=>'#'+id).join(', ')}`
+      ).join('\n')
+    : '';
+
+  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}${looksCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima. Proponha combinações NOVAS, diferentes das já registradas no histórico. Se a sua sugestão ficar parecida com um look já registrado, avise mencionando o número (ex: "parecido com o seu Look #2").`;
 
   addMessage('user', `${occCtx ? 'Ocasião: '+occasions.join(', ')+'\n' : ''}${userQ}`);
   document.getElementById('userPrompt').value = '';
@@ -1641,6 +1736,9 @@ function addMessage(role, text, showPhotos) {
           <div class="sp-label">#${item.id}</div>
         </div>`;
       }).join('') + '</div>';
+      // Botão pra salvar essa sugestão como look
+      const idsCsv = cited.map(i => i.id).join(',');
+      html += `<button class="btn-upload" onclick="salvarLookDaResposta('${idsCsv}')" style="margin-top:8px;font-size:12px;padding:7px 12px;color:var(--accent);border-color:var(--accent)">💾 Salvar este look (${cited.length} peças)</button>`;
     }
   }
   div.innerHTML = html;
@@ -2052,6 +2150,223 @@ function saveBulkPhotos() {
   renderUpload();
   showToast(`${count} fotos salvas! Sincronizando...`);
   flushCloudSync();
+}
+
+// ===================== IDENTIFICAR PEÇA COM IA =====================
+async function identificarComIA() {
+  // Pega a foto do slot principal (pendente ou já salva)
+  const t0 = document.getElementById('editThumb0');
+  let img = t0 && t0._pending ? t0._pending : null;
+  if (!img && editingId !== null) {
+    const p = photos[editingId];
+    img = Array.isArray(p) ? p[0] : p;
+  }
+  if (!img) { showToast('Adicione uma foto principal primeiro'); return; }
+
+  const btn = document.getElementById('iaIdentifyBtn');
+  const txtOrig = btn.textContent;
+  btn.disabled = true; btn.textContent = '✨ Analisando foto...';
+
+  try {
+    const resp = await fetch(CLOUDFLARE_API + '/identificar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': API_TOKEN },
+      body: JSON.stringify({ image: img, categorias: vocab.categorias, cores: vocab.cores })
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    let txt = data.content?.find(b => b.type === 'text')?.text || '';
+    // limpa markdown se vier
+    txt = txt.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const info = JSON.parse(txt);
+
+    // Preenche os campos
+    if (info.tipo) document.getElementById('editTipo').value = info.tipo;
+    if (info.cor) document.getElementById('editCor').value = info.cor;
+    if (info.estampa) document.getElementById('editEstampa').value = info.estampa;
+    if (info.obs) document.getElementById('editObs').value = info.obs;
+    // categoria: adiciona se nova, seleciona
+    if (info.cat) {
+      if (!vocab.categorias.includes(info.cat)) { vocab.categorias.push(info.cat); saveAll(); }
+      const sel = document.getElementById('editCat');
+      sel.innerHTML = vocab.categorias.map(cat => `<option${cat===info.cat?' selected':''}>${cat}</option>`).join('');
+    }
+    showToast('✨ Peça identificada! Revise e ajuste se precisar.');
+  } catch(e) {
+    console.warn('Erro IA:', e);
+    showToast('Não consegui identificar. Confira o endpoint /identificar no Worker.');
+  } finally {
+    btn.disabled = false; btn.textContent = txtOrig;
+  }
+}
+
+// ===================== LOOKS =====================
+let editingLookId = null;
+let lookDraftPieces = [];   // ids no rascunho atual
+let lookDraftPhoto = null;  // dataUrl da foto do look
+
+function renderLooks() {
+  const list = document.getElementById('looksList');
+  if (!looks.length) {
+    list.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:40px 16px;line-height:1.7">Nenhum look salvo ainda.<br>Monte um look aqui ou salve uma sugestão do Stylist IA.</div>`;
+    return;
+  }
+  // mais recentes primeiro
+  const ordered = [...looks].sort((a,b) => (b.id||0) - (a.id||0));
+  list.innerHTML = ordered.map(look => {
+    const pieces = (look.ids||[]).map(id => wardrobe.find(i => i.id === id)).filter(Boolean);
+    const pieceThumbs = pieces.map(p => {
+      const ph = photos[p.id];
+      const src = ph ? (Array.isArray(ph)?ph[0]:ph) : null;
+      return `<div class="look-piece" onclick="openEditModal(${p.id})" title="${p.tipo} — ${p.cor}">
+        ${src ? `<img src="${src}" alt="">` : `<div class="lp-noimg">👗</div>`}
+        <span class="lp-id">#${p.id}</span>
+      </div>`;
+    }).join('');
+    return `<div class="look-card">
+      <div class="look-head">
+        <div>
+          <div class="look-num">Look #${look.id}</div>
+          <div class="look-name">${look.nome || 'Sem nome'}</div>
+          ${look.ocasiao ? `<div class="look-occ">${look.ocasiao}</div>` : ''}
+        </div>
+        ${look.foto ? `<img class="look-photo" src="${look.foto}" onclick="abrirFotoLook('${look.id}')" alt="">` : ''}
+        <button class="btn-upload" onclick="openLookModal(${look.id})" style="align-self:flex-start">✎ Editar</button>
+      </div>
+      <div class="look-pieces">${pieceThumbs || '<span style="color:var(--muted);font-size:12px">Sem peças</span>'}</div>
+      ${look.notas ? `<div class="look-notas">"${look.notas}"</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function abrirFotoLook(id) {
+  const look = looks.find(l => String(l.id) === String(id));
+  if (look && look.foto) {
+    const w = window.open();
+    if (w) w.document.write(`<img src="${look.foto}" style="max-width:100%">`);
+  }
+}
+
+function openLookModal(lookId) {
+  editingLookId = (lookId !== undefined && lookId !== null) ? lookId : null;
+  document.getElementById('lookPieceSearch').value = '';
+  document.getElementById('lookPieceResults').innerHTML = '';
+  if (editingLookId !== null) {
+    const look = looks.find(l => l.id === editingLookId);
+    document.getElementById('lookModalTitle').textContent = 'Editar Look #' + look.id;
+    document.getElementById('lookNome').value = look.nome || '';
+    document.getElementById('lookOcasiao').value = look.ocasiao || '';
+    document.getElementById('lookNotas').value = look.notas || '';
+    lookDraftPieces = [...(look.ids||[])];
+    lookDraftPhoto = look.foto || null;
+    document.getElementById('lookDeleteBtn').style.display = 'block';
+  } else {
+    document.getElementById('lookModalTitle').textContent = 'Montar Look';
+    document.getElementById('lookNome').value = '';
+    document.getElementById('lookOcasiao').value = '';
+    document.getElementById('lookNotas').value = '';
+    lookDraftPieces = [];
+    lookDraftPhoto = null;
+    document.getElementById('lookDeleteBtn').style.display = 'none';
+  }
+  renderLookSelected();
+  renderLookPhotoThumb();
+  document.getElementById('lookModal').style.display = 'flex';
+}
+function closeLookModal() { document.getElementById('lookModal').style.display = 'none'; }
+
+function renderLookPieceSearch() {
+  const q = document.getElementById('lookPieceSearch').value;
+  const box = document.getElementById('lookPieceResults');
+  if (!q.trim()) { box.innerHTML = ''; return; }
+  const found = wardrobe.filter(i => matchesQuery(i, q) && !lookDraftPieces.includes(i.id)).slice(0, 12);
+  box.innerHTML = found.map(i => {
+    const ph = photos[i.id]; const src = ph ? (Array.isArray(ph)?ph[0]:ph) : null;
+    return `<div class="look-search-row" onclick="addLookPiece(${i.id})">
+      <div class="lsr-thumb">${src?`<img src="${src}">`:'📷'}</div>
+      <div style="flex:1;min-width:0"><div style="font-size:12px;color:var(--text)">#${i.id} ${i.tipo}</div><div style="font-size:10px;color:var(--muted)">${i.cat} · ${i.cor}</div></div>
+      <span style="color:var(--accent);font-size:16px">＋</span>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:12px;padding:6px">Nada encontrado</div>';
+}
+
+function addLookPiece(id) {
+  if (!lookDraftPieces.includes(id)) lookDraftPieces.push(id);
+  document.getElementById('lookPieceSearch').value = '';
+  document.getElementById('lookPieceResults').innerHTML = '';
+  renderLookSelected();
+}
+function removeLookPiece(id) {
+  lookDraftPieces = lookDraftPieces.filter(x => x !== id);
+  renderLookSelected();
+}
+function renderLookSelected() {
+  const box = document.getElementById('lookSelectedPieces');
+  if (!lookDraftPieces.length) { box.innerHTML = '<span style="color:var(--muted);font-size:12px">Nenhuma peça ainda</span>'; return; }
+  box.innerHTML = lookDraftPieces.map(id => {
+    const i = wardrobe.find(w => w.id === id);
+    if (!i) return '';
+    return `<span class="tag-edit-chip" onclick="removeLookPiece(${id})">#${id} ${i.tipo} <span class="x">✕</span></span>`;
+  }).join('');
+}
+
+async function handleLookPhoto(input) {
+  const file = input.files[0]; if (!file) return;
+  lookDraftPhoto = await compressImage(file, 900, 0.65);
+  renderLookPhotoThumb();
+}
+function removeLookPhoto() { lookDraftPhoto = null; renderLookPhotoThumb(); }
+function renderLookPhotoThumb() {
+  const t = document.getElementById('lookPhotoThumb');
+  const rm = document.getElementById('lookPhotoRemove');
+  if (lookDraftPhoto) {
+    t.style.border = '1px solid var(--accent)';
+    t.innerHTML = `<img src="${lookDraftPhoto}" style="width:100%;height:100%;object-fit:cover">`;
+    rm.style.display = 'block';
+  } else {
+    t.style.border = '1px dashed var(--border)';
+    t.innerHTML = '<span style="font-size:24px">📷</span>';
+    rm.style.display = 'none';
+  }
+}
+
+function saveLook() {
+  if (!lookDraftPieces.length) { showToast('Adicione pelo menos uma peça'); return; }
+  const nome = document.getElementById('lookNome').value.trim();
+  const ocasiao = document.getElementById('lookOcasiao').value.trim();
+  const notas = document.getElementById('lookNotas').value.trim();
+  if (editingLookId !== null) {
+    const look = looks.find(l => l.id === editingLookId);
+    Object.assign(look, { nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto });
+  } else {
+    const newId = Math.max(0, ...looks.map(l => l.id||0)) + 1;
+    looks.push({ id: newId, nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto, criadoEm: new Date().toISOString() });
+  }
+  saveAll();
+  closeLookModal();
+  renderLooks();
+  showToast('Look salvo! Sincronizando...');
+  flushCloudSync();
+}
+
+function deleteCurrentLook() {
+  if (editingLookId === null) return;
+  if (!confirm('Excluir este look?')) return;
+  looks = looks.filter(l => l.id !== editingLookId);
+  saveAll();
+  closeLookModal();
+  renderLooks();
+  showToast('Look excluído');
+  flushCloudSync();
+}
+
+// Salvar look a partir de uma sugestão do Stylist (botão na resposta)
+function salvarLookDaResposta(idsCsv) {
+  const ids = idsCsv.split(',').map(Number).filter(Boolean);
+  openLookModal(null);
+  lookDraftPieces = ids;
+  renderLookSelected();
+  showToast('Revise e salve o look');
 }
 
 // ===================== TOAST =====================
