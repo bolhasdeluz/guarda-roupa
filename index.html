@@ -53,10 +53,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .item-card{background:var(--card);border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .15s,border-color .15s;position:relative}
 .item-card:hover{transform:translateY(-2px);border-color:var(--accent)}
 .item-card.selected{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
-.select-badge{position:absolute;top:7px;right:7px;width:20px;height:20px;background:var(--accent);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:11px;color:var(--bg);font-weight:700;z-index:2}
+.select-badge{position:absolute;top:7px;right:7px;width:20px;height:20px;background:var(--accent);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:11px;color:var(--bg);font-weight:700;z-index:3}
 .item-card.selected .select-badge{display:flex}
-.edit-badge{position:absolute;top:7px;left:7px;width:22px;height:22px;background:rgba(0,0,0,.6);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:11px;z-index:2;border:1px solid var(--border)}
-.item-card:hover .edit-badge{display:flex}
+.edit-badge{position:absolute;top:7px;left:7px;width:22px;height:22px;background:rgba(0,0,0,.75);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;z-index:2;border:1px solid rgba(201,169,110,.4);color:var(--accent2)}
 .item-card.selected .edit-badge{display:none}
 .no-photo{width:100%;aspect-ratio:1;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;color:var(--muted);font-size:10px}
 .no-photo-icon{font-size:26px}
@@ -204,6 +203,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
         <option value="com">Com foto</option>
         <option value="sem">Sem foto</option>
       </select>
+      <button class="btn-tool primary" onclick="openNewItemModal()" style="font-size:13px;padding:8px 14px;border-radius:8px">＋ Nova peça</button>
       <span class="filter-count" id="filterCount"></span>
     </div>
     <div class="chip-row" id="corChips">
@@ -566,11 +566,27 @@ function loadState() {
   try {
     const p = localStorage.getItem('gr_photos'); if (p) photos = JSON.parse(p);
     const s = localStorage.getItem('gr_selected'); if (s) selectedItems = new Set(JSON.parse(s));
-    const v = localStorage.getItem('gr_vocab'); if (v) vocab = {...vocab, ...JSON.parse(v)};
+    const v = localStorage.getItem('gr_vocab');
+    if (v) {
+      const pv = JSON.parse(v);
+      Object.keys(pv).forEach(k => {
+        if (vocab[k]) vocab[k] = [...new Set([...vocab[k], ...pv[k]])];
+        else vocab[k] = pv[k];
+      });
+    }
     const t = localStorage.getItem('gr_tags'); if (t) itemTags = JSON.parse(t);
-    const w = localStorage.getItem('gr_wardrobe'); if (w) wardrobe = JSON.parse(w);
-    else wardrobe = BASE_WARDROBE.map(i => ({...i}));
-  } catch(e) { wardrobe = BASE_WARDROBE.map(i => ({...i})); }
+    const w = localStorage.getItem('gr_wardrobe');
+    if (w) {
+      const pw = JSON.parse(w);
+      wardrobe = (Array.isArray(pw) && pw.length > 0) ? pw : BASE_WARDROBE.map(i => ({...i}));
+    } else {
+      wardrobe = BASE_WARDROBE.map(i => ({...i}));
+    }
+  } catch(e) {
+    console.warn('loadState error, using defaults:', e);
+    wardrobe = BASE_WARDROBE.map(i => ({...i}));
+  }
+  if (!wardrobe || wardrobe.length === 0) wardrobe = BASE_WARDROBE.map(i => ({...i}));
 }
 
 function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
@@ -578,8 +594,6 @@ function saveAll() {
   save('gr_photos', photos); save('gr_selected', [...selectedItems]);
   save('gr_vocab', vocab); save('gr_tags', itemTags); save('gr_wardrobe', wardrobe);
 }
-
-loadState();
 
 // ===================== PANELS =====================
 function showPanel(id, btn) {
@@ -1208,8 +1222,11 @@ function showToast(msg) {
 }
 
 // ===================== INIT =====================
-buildFilterUI();
-renderGrid();
+document.addEventListener('DOMContentLoaded', function() {
+  loadState();
+  buildFilterUI();
+  renderGrid();
+});
 </script>
 </body>
 </html>
