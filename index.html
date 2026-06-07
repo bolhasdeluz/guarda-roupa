@@ -245,6 +245,14 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .lsr-thumb{width:38px;height:38px;border-radius:6px;background:var(--card);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;font-size:14px}
 .lsr-thumb img{width:100%;height:100%;object-fit:cover}
 
+.tag-pick{font-size:12px;padding:7px 13px;border-radius:16px;background:var(--tag-bg);border:1px solid var(--border);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.tag-pick:hover{border-color:var(--accent)}
+.tag-pick.on{background:#241f14;border-color:var(--accent);color:var(--accent);font-weight:500;padding-right:30px;position:relative}
+.tag-pick.on::after{content:'✓';position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:11px}
+.tag-pick-add{font-size:12px;padding:7px 13px;border-radius:16px;background:none;border:1px dashed var(--border);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.tag-pick-add:hover{border-color:var(--accent);color:var(--accent)}
+.tag-editor-row{flex-wrap:wrap!important;overflow:visible!important}
+
 /* RESPONSIVE */
 @media(max-width:860px){
   .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
@@ -497,19 +505,19 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     </div>
 
     <div class="section-divider">Tags de cor</div>
-    <div class="chip-row" id="editCorTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+    <div class="chip-row tag-editor-row" id="editCorTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px;flex-wrap:wrap;gap:6px"></div>
 
     <div class="section-divider">Estado da peça</div>
-    <div class="chip-row" id="editEstadoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+    <div class="chip-row tag-editor-row" id="editEstadoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px;flex-wrap:wrap;gap:6px"></div>
 
     <div class="section-divider">Estação</div>
-    <div class="chip-row" id="editEstacaoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+    <div class="chip-row tag-editor-row" id="editEstacaoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px;flex-wrap:wrap;gap:6px"></div>
 
     <div class="section-divider">Ocasião</div>
-    <div class="chip-row" id="editOcasiaoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+    <div class="chip-row tag-editor-row" id="editOcasiaoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px;flex-wrap:wrap;gap:6px"></div>
 
     <div class="section-divider">Origem</div>
-    <div class="chip-row" id="editOrigemTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+    <div class="chip-row tag-editor-row" id="editOrigemTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px;flex-wrap:wrap;gap:6px"></div>
 
     <div class="modal-actions">
       <button class="btn-danger" id="editDeleteBtn" onclick="deleteCurrentItem()">🗑 Excluir</button>
@@ -1380,49 +1388,59 @@ function openNewItemModal() {
 
 function buildTagEditor(containerId, vocabKey, currentTags) {
   const container = document.getElementById(containerId);
+  container.dataset.vocabKey = vocabKey;
+  renderTagChips(container, vocabKey, new Set(currentTags));
+}
+
+// Mostra TODAS as opções do vocabulário como chips clicáveis (marca/desmarca)
+function renderTagChips(container, vocabKey, selectedSet) {
   container.innerHTML = '';
-  currentTags.forEach(tag => {
-    const chip = document.createElement('span');
-    chip.className = 'tag-edit-chip';
-    chip.innerHTML = `${tag} <span class="x">✕</span>`;
-    chip.onclick = () => { chip.remove(); };
+  vocab[vocabKey].forEach(opt => {
+    const on = selectedSet.has(opt);
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'tag-pick' + (on ? ' on' : '');
+    chip.textContent = opt;
+    chip.dataset.value = opt;
+    chip.dataset.on = on ? '1' : '0';
+    chip.onclick = (e) => {
+      e.preventDefault();
+      const isOn = chip.dataset.on === '1';
+      chip.dataset.on = isOn ? '0' : '1';
+      chip.classList.toggle('on', !isOn);
+    };
     container.appendChild(chip);
   });
-  // Add button — shows dropdown of available options
+  // botão de adicionar opção nova ao vocabulário
   const addBtn = document.createElement('button');
-  addBtn.className = 'tag-add-inline';
-  addBtn.textContent = '＋ adicionar';
+  addBtn.type = 'button';
+  addBtn.className = 'tag-pick-add';
+  addBtn.textContent = '＋ nova';
   addBtn.onclick = (e) => {
     e.preventDefault();
-    const available = vocab[vocabKey].filter(v =>
-      !Array.from(container.querySelectorAll('.tag-edit-chip'))
-        .map(c => c.textContent.replace('✕','').trim())
-        .includes(v));
-    if (available.length === 0 && !confirm('Todas as opções já foram adicionadas. Criar nova?')) return;
-    let val;
-    if (available.length > 0) {
-      val = prompt(`Escolha ou escreva:\n${available.map((v,i)=>`${i+1}. ${v}`).join('\n')}\n\nOu escreva uma nova:`);
-    } else {
-      val = prompt('Nova opção:');
-    }
+    const val = prompt('Nova opção:');
     if (!val || !val.trim()) return;
-    val = val.trim();
-    // If it's a number, pick from list
-    const num = parseInt(val);
-    if (!isNaN(num) && num >= 1 && num <= available.length) val = available[num - 1];
-    if (!vocab[vocabKey].includes(val)) { vocab[vocabKey].push(val); saveAll(); }
-    const chip = document.createElement('span');
-    chip.className = 'tag-edit-chip';
-    chip.innerHTML = `${val} <span class="x">✕</span>`;
-    chip.onclick = () => chip.remove();
-    container.insertBefore(chip, addBtn);
+    const v = val.trim();
+    if (!vocab[vocabKey].includes(v)) { vocab[vocabKey].push(v); saveAll(); }
+    // re-renderiza mantendo o que já estava marcado + marca a nova
+    const sel = getSelectedSet(container);
+    sel.add(v);
+    renderTagChips(container, vocabKey, sel);
   };
   container.appendChild(addBtn);
 }
 
+function getSelectedSet(container) {
+  const set = new Set();
+  container.querySelectorAll('.tag-pick').forEach(ch => { if (ch.dataset.on === '1') set.add(ch.dataset.value); });
+  return set;
+}
+
 function getTagsFromEditor(containerId) {
-  return Array.from(document.getElementById(containerId).querySelectorAll('.tag-edit-chip'))
-    .map(c => c.textContent.replace('✕','').trim());
+  const container = document.getElementById(containerId);
+  return Array.from(container.querySelectorAll('.tag-pick'))
+    .filter(ch => ch.dataset.on === '1')
+    .map(ch => ch.dataset.value);
 }
 
 async function saveEditModal() {
