@@ -71,6 +71,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .tag.estado{color:#c0a0b0;border-color:#352030;background:#1e1420}
 .tag.estacao{color:#a0b8a0;border-color:#253025;background:#141e14}
 .tag.ocas{color:#b0b0d0;border-color:#252535;background:#141420}
+.tag.origem{color:#d0b880;border-color:#352a10;background:#1e1a08}
 
 /* EDIT MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
@@ -218,6 +219,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     <div class="chip-row" id="ocasiaoChips">
       <span class="chip-label">Ocasião</span>
     </div>
+    <div class="chip-row" id="origemChips">
+      <span class="chip-label">Origem</span>
+    </div>
   </div>
   <div class="grid" id="itemGrid"></div>
 </div>
@@ -318,6 +322,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 
     <div class="section-divider">Ocasião</div>
     <div class="chip-row" id="editOcasiaoTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
+
+    <div class="section-divider">Origem</div>
+    <div class="chip-row" id="editOrigemTags" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;min-height:36px"></div>
 
     <div class="modal-actions">
       <button class="btn-danger" id="editDeleteBtn" onclick="deleteCurrentItem()">🗑 Excluir</button>
@@ -553,14 +560,197 @@ let vocab = {
   cores: ["Preto","Branco","Cinza","Vermelho","Rosa","Laranja","Amarelo","Verde","Azul","Roxo","Marrom","Bege","Multicolor","Estampado"],
   estados: ["Novo","Bom estado","Usado","Velho","Rasgado","Pequeno","Grande","Precisa ajuste","Para doação"],
   estacoes: ["Verão","Inverno","Outono","Primavera","Meia estação"],
-  ocasioes: ["Trabalho","Casual","Noite","Ritual","Viagem","Festa","Conforto","Esporte","Praia"]
+  ocasioes: ["Trabalho","Casual","Noite","Ritual","Viagem","Festa","Conforto","Esporte","Praia"],
+  origens: ["Avulsa", "Camisetas", "Diversos_2", "Diversos_3", "Foto IMG", "Lado direito do armário", "Lado esquerdo do armário", "Novas fotos", "Roupas novas", "Roupeiro do meio", "Vestidos_2", "Vestidos_part_1"]
 };
 
-// Tags por item: {id: {cores:[], estados:[], estacoes:[], ocasioes:[]}}
+// Tags por item: {id: {cores:[], estados:[], estacoes:[], ocasioes:[], origens:[]}}
+// Origens pré-populadas do catálogo original
+const BASE_ITEM_TAGS = {
+  "1": {"origens": ["Diversos_2"]},
+  "2": {"origens": ["Diversos_2"]},
+  "3": {"origens": ["Diversos_2"]},
+  "4": {"origens": ["Diversos_2"]},
+  "5": {"origens": ["Diversos_2"]},
+  "6": {"origens": ["Diversos_2"]},
+  "7": {"origens": ["Diversos_2"]},
+  "8": {"origens": ["Diversos_2"]},
+  "9": {"origens": ["Diversos_2"]},
+  "10": {"origens": ["Diversos_2"]},
+  "11": {"origens": ["Diversos_2"]},
+  "12": {"origens": ["Diversos_2"]},
+  "14": {"origens": ["Diversos_2"]},
+  "15": {"origens": ["Camisetas"]},
+  "16": {"origens": ["Camisetas"]},
+  "17": {"origens": ["Camisetas"]},
+  "18": {"origens": ["Camisetas"]},
+  "19": {"origens": ["Camisetas"]},
+  "20": {"origens": ["Camisetas"]},
+  "21": {"origens": ["Camisetas"]},
+  "22": {"origens": ["Camisetas"]},
+  "23": {"origens": ["Camisetas"]},
+  "24": {"origens": ["Camisetas"]},
+  "25": {"origens": ["Camisetas"]},
+  "26": {"origens": ["Diversos_3"]},
+  "27": {"origens": ["Diversos_3"]},
+  "28": {"origens": ["Diversos_3"]},
+  "29": {"origens": ["Diversos_3"]},
+  "30": {"origens": ["Diversos_3"]},
+  "31": {"origens": ["Diversos_3"]},
+  "32": {"origens": ["Diversos_3"]},
+  "33": {"origens": ["Diversos_3"]},
+  "34": {"origens": ["Diversos_3"]},
+  "35": {"origens": ["Diversos_3"]},
+  "36": {"origens": ["Diversos_3"]},
+  "37": {"origens": ["Diversos_3"]},
+  "38": {"origens": ["Diversos_3"]},
+  "39": {"origens": ["Diversos_3"]},
+  "40": {"origens": ["Diversos_3"]},
+  "41": {"origens": ["Diversos_3"]},
+  "42": {"origens": ["Diversos_3"]},
+  "43": {"origens": ["Diversos_3"]},
+  "44": {"origens": ["Diversos_3"]},
+  "45": {"origens": ["Diversos_3"]},
+  "46": {"origens": ["Diversos_3"]},
+  "47": {"origens": ["Diversos_3"]},
+  "48": {"origens": ["Diversos_3"]},
+  "49": {"origens": ["Diversos_3"]},
+  "50": {"origens": ["Vestidos_2"]},
+  "51": {"origens": ["Vestidos_2"]},
+  "52": {"origens": ["Vestidos_2"]},
+  "53": {"origens": ["Vestidos_2"]},
+  "54": {"origens": ["Vestidos_2"]},
+  "55": {"origens": ["Vestidos_2"]},
+  "56": {"origens": ["Vestidos_2"]},
+  "57": {"origens": ["Vestidos_part_1"]},
+  "58": {"origens": ["Vestidos_part_1"]},
+  "59": {"origens": ["Vestidos_part_1"]},
+  "60": {"origens": ["Vestidos_part_1"]},
+  "61": {"origens": ["Vestidos_part_1"]},
+  "62": {"origens": ["Vestidos_part_1"]},
+  "63": {"origens": ["Vestidos_part_1"]},
+  "64": {"origens": ["Foto IMG"]},
+  "65": {"origens": ["Foto IMG"]},
+  "66": {"origens": ["Foto IMG"]},
+  "67": {"origens": ["Foto IMG"]},
+  "68": {"origens": ["Foto IMG"]},
+  "69": {"origens": ["Foto IMG"]},
+  "70": {"origens": ["Foto IMG"]},
+  "71": {"origens": ["Foto IMG"]},
+  "72": {"origens": ["Foto IMG"]},
+  "73": {"origens": ["Foto IMG"]},
+  "74": {"origens": ["Foto IMG"]},
+  "75": {"origens": ["Foto IMG"]},
+  "76": {"origens": ["Foto IMG"]},
+  "77": {"origens": ["Foto IMG"]},
+  "78": {"origens": ["Foto IMG"]},
+  "79": {"origens": ["Foto IMG"]},
+  "80": {"origens": ["Foto IMG"]},
+  "81": {"origens": ["Foto IMG"]},
+  "82": {"origens": ["Foto IMG"]},
+  "83": {"origens": ["Novas fotos"]},
+  "84": {"origens": ["Novas fotos"]},
+  "85": {"origens": ["Novas fotos"]},
+  "86": {"origens": ["Novas fotos"]},
+  "87": {"origens": ["Novas fotos"]},
+  "88": {"origens": ["Novas fotos"]},
+  "89": {"origens": ["Novas fotos"]},
+  "90": {"origens": ["Novas fotos"]},
+  "91": {"origens": ["Novas fotos"]},
+  "92": {"origens": ["Novas fotos"]},
+  "93": {"origens": ["Novas fotos"]},
+  "94": {"origens": ["Novas fotos"]},
+  "95": {"origens": ["Novas fotos"]},
+  "96": {"origens": ["Novas fotos"]},
+  "97": {"origens": ["Novas fotos"]},
+  "98": {"origens": ["Novas fotos"]},
+  "99": {"origens": ["Novas fotos"]},
+  "100": {"origens": ["Novas fotos"]},
+  "101": {"origens": ["Novas fotos"]},
+  "102": {"origens": ["Roupas novas"]},
+  "103": {"origens": ["Roupas novas"]},
+  "104": {"origens": ["Roupas novas"]},
+  "105": {"origens": ["Roupas novas"]},
+  "106": {"origens": ["Roupas novas"]},
+  "107": {"origens": ["Roupas novas"]},
+  "108": {"origens": ["Roupas novas"]},
+  "109": {"origens": ["Roupas novas"]},
+  "110": {"origens": ["Roupas novas"]},
+  "111": {"origens": ["Roupas novas"]},
+  "112": {"origens": ["Roupas novas"]},
+  "113": {"origens": ["Roupas novas"]},
+  "114": {"origens": ["Roupas novas"]},
+  "115": {"origens": ["Lado esquerdo do armário"]},
+  "116": {"origens": ["Lado esquerdo do armário"]},
+  "117": {"origens": ["Lado esquerdo do armário"]},
+  "118": {"origens": ["Lado esquerdo do armário"]},
+  "119": {"origens": ["Lado esquerdo do armário"]},
+  "120": {"origens": ["Lado esquerdo do armário"]},
+  "121": {"origens": ["Lado esquerdo do armário"]},
+  "122": {"origens": ["Lado esquerdo do armário"]},
+  "123": {"origens": ["Lado esquerdo do armário"]},
+  "124": {"origens": ["Lado esquerdo do armário"]},
+  "125": {"origens": ["Lado esquerdo do armário"]},
+  "126": {"origens": ["Lado esquerdo do armário"]},
+  "127": {"origens": ["Lado esquerdo do armário"]},
+  "128": {"origens": ["Roupeiro do meio"]},
+  "129": {"origens": ["Roupeiro do meio"]},
+  "130": {"origens": ["Roupeiro do meio"]},
+  "131": {"origens": ["Roupeiro do meio"]},
+  "132": {"origens": ["Roupeiro do meio"]},
+  "133": {"origens": ["Roupeiro do meio"]},
+  "134": {"origens": ["Roupeiro do meio"]},
+  "135": {"origens": ["Roupeiro do meio"]},
+  "136": {"origens": ["Roupeiro do meio"]},
+  "137": {"origens": ["Roupeiro do meio"]},
+  "138": {"origens": ["Roupeiro do meio"]},
+  "139": {"origens": ["Roupeiro do meio"]},
+  "140": {"origens": ["Roupeiro do meio"]},
+  "141": {"origens": ["Roupeiro do meio"]},
+  "142": {"origens": ["Roupeiro do meio"]},
+  "143": {"origens": ["Lado esquerdo do armário"]},
+  "144": {"origens": ["Lado esquerdo do armário"]},
+  "145": {"origens": ["Lado esquerdo do armário"]},
+  "146": {"origens": ["Lado esquerdo do armário"]},
+  "147": {"origens": ["Lado esquerdo do armário"]},
+  "148": {"origens": ["Lado esquerdo do armário"]},
+  "149": {"origens": ["Lado esquerdo do armário"]},
+  "150": {"origens": ["Roupeiro do meio"]},
+  "151": {"origens": ["Lado direito do armário"]},
+  "152": {"origens": ["Lado direito do armário"]},
+  "153": {"origens": ["Lado direito do armário"]},
+  "154": {"origens": ["Lado direito do armário"]},
+  "155": {"origens": ["Lado direito do armário"]},
+  "156": {"origens": ["Lado direito do armário"]},
+  "157": {"origens": ["Lado direito do armário"]},
+  "158": {"origens": ["Lado direito do armário"]},
+  "159": {"origens": ["Lado direito do armário"]},
+  "160": {"origens": ["Lado direito do armário"]},
+  "161": {"origens": ["Lado direito do armário"]},
+  "162": {"origens": ["Lado direito do armário"]},
+  "163": {"origens": ["Lado direito do armário"]},
+  "164": {"origens": ["Lado direito do armário"]},
+  "165": {"origens": ["Lado direito do armário"]},
+  "166": {"origens": ["Lado direito do armário"]},
+  "167": {"origens": ["Lado direito do armário"]},
+  "168": {"origens": ["Lado direito do armário"]},
+  "169": {"origens": ["Lado direito do armário"]},
+  "170": {"origens": ["Roupeiro do meio"]},
+  "171": {"origens": ["Roupeiro do meio"]},
+  "172": {"origens": ["Avulsa"]},
+  "173": {"origens": ["Avulsa"]},
+  "174": {"origens": ["Avulsa"]},
+  "175": {"origens": ["Lado esquerdo do armário"]},
+  "176": {"origens": ["Roupeiro do meio"]},
+  "177": {"origens": ["Roupeiro do meio"]},
+  "178": {"origens": ["Lado direito do armário"]},
+  "179": {"origens": ["Lado direito do armário"]},
+  "180": {"origens": ["Lado direito do armário"]}
+};
 let itemTags = {};
 
 // Filtros ativos
-let activeFilters = { cores: new Set(), estados: new Set(), estacoes: new Set(), ocasioes: new Set() };
+let activeFilters = { cores: new Set(), estados: new Set(), estacoes: new Set(), ocasioes: new Set(), origens: new Set() };
 
 function loadState() {
   try {
@@ -574,7 +764,21 @@ function loadState() {
         else vocab[k] = pv[k];
       });
     }
-    const t = localStorage.getItem('gr_tags'); if (t) itemTags = JSON.parse(t);
+    const t = localStorage.getItem('gr_tags');
+    if (t) {
+      const saved = JSON.parse(t);
+      // Merge: start from BASE, then overlay saved data
+      itemTags = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
+      Object.keys(saved).forEach(k => {
+        if (!itemTags[k]) itemTags[k] = saved[k];
+        else {
+          // Merge each tag array, keeping saved values and adding any base ones not overridden
+          Object.keys(saved[k]).forEach(field => { itemTags[k][field] = saved[k][field]; });
+        }
+      });
+    } else {
+      itemTags = JSON.parse(JSON.stringify(BASE_ITEM_TAGS));
+    }
     const w = localStorage.getItem('gr_wardrobe');
     if (w) {
       const pw = JSON.parse(w);
@@ -617,6 +821,7 @@ function buildFilterUI() {
   buildChipRow('estadoChips', 'estados');
   buildChipRow('estacaoChips', 'estacoes');
   buildChipRow('ocasiaoChips', 'ocasioes');
+  buildChipRow('origemChips', 'origens');
 }
 
 function buildChipRow(containerId, vocabKey) {
@@ -625,7 +830,7 @@ function buildChipRow(containerId, vocabKey) {
   container.innerHTML = '';
   if (label) container.appendChild(label);
   else { const l = document.createElement('span'); l.className = 'chip-label';
-    l.textContent = {cores:'Cor',estados:'Estado',estacoes:'Estação',ocasioes:'Ocasião'}[vocabKey]; container.appendChild(l); }
+    l.textContent = {cores:'Cor',estados:'Estado',estacoes:'Estação',ocasioes:'Ocasião',origens:'Origem'}[vocabKey]; container.appendChild(l); }
 
   vocab[vocabKey].forEach(v => {
     const btn = document.createElement('button');
@@ -672,6 +877,7 @@ function renderGrid(filtered) {
       ...(tags.estados || []).map(t => `<span class="tag estado">${t}</span>`),
       ...(tags.estacoes || []).map(t => `<span class="tag estacao">${t}</span>`),
       ...(tags.ocasioes || []).map(t => `<span class="tag ocas">${t}</span>`),
+      ...(tags.origens || []).map(t => `<span class="tag origem">${t}</span>`),
     ].join('');
     return `<div class="item-card${sel?' selected':''}" data-id="${item.id}">
       <div class="select-badge">✓</div>
@@ -719,7 +925,7 @@ function filterItems() {
         corText.includes(fc.toLowerCase()) || corTags.includes(fc));
       if (!match) return false;
     }
-    for (const key of ['estados','estacoes','ocasioes']) {
+    for (const key of ['estados','estacoes','ocasioes','origens']) {
       if (activeFilters[key] && activeFilters[key].size > 0) {
         const itemTagList = tags[key] || [];
         const match = [...activeFilters[key]].some(f => itemTagList.includes(f));
@@ -765,6 +971,7 @@ function openEditModal(id, event) {
   buildTagEditor('editEstadoTags', 'estados', tags.estados || []);
   buildTagEditor('editEstacaoTags', 'estacoes', tags.estacoes || []);
   buildTagEditor('editOcasiaoTags', 'ocasioes', tags.ocasioes || []);
+  buildTagEditor('editOrigemTags', 'origens', tags.origens || []);
 
   document.getElementById('editModal').style.display = 'flex';
 }
@@ -783,6 +990,7 @@ function openNewItemModal() {
   buildTagEditor('editEstadoTags', 'estados', []);
   buildTagEditor('editEstacaoTags', 'estacoes', []);
   buildTagEditor('editOcasiaoTags', 'ocasioes', []);
+  buildTagEditor('editOrigemTags', 'origens', []);
   document.getElementById('editModal').style.display = 'flex';
 }
 
@@ -846,6 +1054,7 @@ function saveEditModal() {
     estados: getTagsFromEditor('editEstadoTags'),
     estacoes: getTagsFromEditor('editEstacaoTags'),
     ocasioes: getTagsFromEditor('editOcasiaoTags'),
+    origens: getTagsFromEditor('editOrigemTags'),
   };
 
   if (editingId !== null) {
@@ -982,7 +1191,7 @@ async function askStylist() {
   const wardrobeCtx = wardrobe.map(i => {
     const tags = itemTags[i.id] || {};
     const tagStr = [
-      ...(tags.estados || []), ...(tags.estacoes || []), ...(tags.ocasioes || [])
+      ...(tags.estados || []), ...(tags.estacoes || []), ...(tags.ocasioes || []), ...(tags.origens || [])
     ].join(', ');
     return `#${i.id}|${i.cat}|${i.tipo}|${i.cor}|${i.estampa}${tagStr?' ['+tagStr+']':''}${photos[i.id]?' [foto]':''}`;
   }).join('\n');
@@ -1102,13 +1311,23 @@ function normalizeRow(r) {
   const g = (...keys) => { for(const k of keys) if(r[k]!==undefined&&r[k]!=='') return String(r[k]); return ''; };
   return { id:g('id','ID'), cat:g('cat','Categoria','categoria'), tipo:g('tipo','Tipo','type'),
     cor:g('cor','Cor principal','Cor','color'), estampa:g('estampa','Estampa','pattern'),
-    obs:g('obs','Observações','Observacoes','notes','Tags') };
+    obs:g('obs','Observações','Observacoes','notes','Tags'),
+    origem:g('origem','Origem','origin') };
 }
 
 function processImportRows(rawRows, filename) {
   const existingIds = new Set(wardrobe.map(i=>i.id));
   importPending = rawRows.map(normalizeRow).filter(r=>r.id && !existingIds.has(Number(r.id)))
-    .map(r => ({ id:Number(r.id), cat:r.cat||'Outros', tipo:r.tipo, cor:r.cor, estampa:r.estampa, obs:r.obs }));
+    .map(r => {
+      const item = { id:Number(r.id), cat:r.cat||'Outros', tipo:r.tipo, cor:r.cor, estampa:r.estampa, obs:r.obs };
+      if (r.origem && r.origem.trim()) {
+        const origem = r.origem.trim();
+        if (!vocab.origens.includes(origem)) vocab.origens.push(origem);
+        itemTags[item.id] = itemTags[item.id] || {};
+        itemTags[item.id].origens = [origem];
+      }
+      return item;
+    });
   const preview = document.getElementById('importPreview');
   if (!importPending.length) {
     preview.innerHTML = '⚠ Nenhuma peça nova em <em>'+filename+'</em>';
