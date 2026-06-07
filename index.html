@@ -178,6 +178,42 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .empty-chat .icon{font-size:32px;opacity:.4}
 .empty-chat p{font-size:13px;max-width:260px;line-height:1.6}
 
+
+/* ── BULK DISTRIBUTOR ── */
+.bulk-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:500;display:flex;flex-direction:column}
+.bulk-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-shrink:0;background:var(--bg)}
+.bulk-header h3{font-family:'Playfair Display',serif;font-size:16px;color:var(--accent2);flex:1}
+.bulk-body{display:flex;flex:1;overflow:hidden;gap:0}
+.bulk-queue{width:160px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.bulk-queue-header{padding:10px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);border-bottom:1px solid var(--border);flex-shrink:0}
+.bulk-queue-list{overflow-y:auto;flex:1;padding:8px;display:flex;flex-direction:column;gap:6px}
+.bulk-q-thumb{width:100%;aspect-ratio:1;border-radius:8px;object-fit:cover;cursor:grab;border:2px solid transparent;transition:border-color .15s;user-select:none}
+.bulk-q-thumb.active{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.bulk-q-thumb.used{opacity:.3;filter:grayscale(1)}
+.bulk-main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+.bulk-preview{flex-shrink:0;display:flex;align-items:center;justify-content:center;background:var(--card);border-bottom:1px solid var(--border);padding:12px;gap:16px}
+.bulk-preview-img{width:120px;height:120px;border-radius:10px;object-fit:cover;border:1px solid var(--border)}
+.bulk-preview-placeholder{width:120px;height:120px;border-radius:10px;border:2px dashed var(--border);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);font-size:11px;gap:4px}
+.bulk-preview-info{flex:1}
+.bulk-preview-info .name{font-size:14px;font-weight:500;margin-bottom:4px}
+.bulk-preview-info .sub{font-size:11px;color:var(--muted)}
+.bulk-grid{flex:1;overflow-y:auto;padding:12px;display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
+.bulk-card{border-radius:8px;border:2px solid var(--border);overflow:hidden;cursor:pointer;transition:border-color .15s;background:var(--card);position:relative}
+.bulk-card:hover{border-color:var(--accent)}
+.bulk-card.has-photo{border-color:#3a3020}
+.bulk-card .bthumb{width:100%;aspect-ratio:1;object-fit:cover;background:var(--surface);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--muted)}
+.bulk-card .bthumb img{width:100%;height:100%;object-fit:cover}
+.bulk-card .binfo{padding:5px 6px;font-size:9px}
+.bulk-card .binfo .bid{color:var(--accent);font-weight:600}
+.bulk-card .binfo .bname{color:var(--muted);line-height:1.3;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bulk-card .bcheck{position:absolute;top:4px;right:4px;width:16px;height:16px;background:var(--green);border-radius:50%;display:none;align-items:center;justify-content:center;font-size:9px;color:#fff}
+.bulk-card.has-photo .bcheck{display:flex}
+.bulk-drop-hint{position:absolute;inset:0;background:rgba(201,169,110,.15);border:2px dashed var(--accent);border-radius:6px;display:none;align-items:center;justify-content:center;font-size:11px;color:var(--accent);pointer-events:none}
+.bulk-card.drag-over .bulk-drop-hint{display:flex}
+.bulk-actions{padding:10px 16px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--bg)}
+.bulk-counter{font-size:11px;color:var(--muted);margin-right:auto}
+.bulk-counter strong{color:var(--accent)}
+
 /* RESPONSIVE */
 @media(max-width:860px){.stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}header{padding:14px}nav button{font-size:11px;padding:5px 10px}}
 </style>
@@ -236,6 +272,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
       <button class="btn-tool primary" id="exportPdfBtn" onclick="exportPDF()">⬇ Exportar PDF</button>
       <button class="btn-tool" onclick="exportJSON()">⬇ Backup JSON</button>
       <button class="btn-tool" onclick="openNewItemModal()">＋ Nova peça</button>
+      <button class="btn-tool primary" onclick="openBulkModal()">🗂 Distribuir fotos em lote</button>
     </div>
     <div class="upload-search-row">
       <input class="search-input" id="uploadSearch" placeholder="Filtrar peças..." oninput="filterUpload()" style="max-width:300px">
@@ -282,18 +319,28 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
   <div class="modal-box">
     <h3 id="editModalTitle">Editar Peça</h3>
 
-    <!-- FOTO -->
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
-      <label for="editPhotoInput" id="editPhotoThumb" style="width:80px;height:80px;border-radius:10px;border:1px dashed var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;flex-shrink:0;transition:border-color .2s" title="Adicionar foto" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="if(!this.querySelector('img'))this.style.borderColor='var(--border)'">
-        <span id="editPhotoIcon" style="font-size:26px">📷</span>
-        <span id="editPhotoLabel" style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>
-      </label>
-      <input type="file" id="editPhotoInput" accept="image/*" style="display:none" onchange="handleEditPhoto(this)">
-      <div style="flex:1">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:6px">Foto</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="btn-upload" onclick="document.getElementById('editPhotoInput').click()" style="font-size:12px;padding:7px 12px">📷 Adicionar foto</button>
-          <button class="btn-upload" id="editPhotoRemoveBtn" onclick="removeEditPhoto()" style="font-size:12px;padding:7px 12px;color:var(--red);border-color:var(--red);display:none">✕ Remover</button>
+    <!-- FOTOS (2 slots) -->
+    <div style="margin-bottom:18px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px">Fotos</div>
+      <div style="display:flex;gap:10px">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <label for="editPhotoInput0" id="editThumb0" style="width:90px;height:90px;border-radius:10px;border:1px dashed var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s">
+            <span style="font-size:22px">📷</span>
+            <span style="font-size:8px;color:var(--muted);margin-top:3px">Principal</span>
+          </label>
+          <input type="file" id="editPhotoInput0" accept="image/*" style="display:none" onchange="handleEditPhoto(0,this)">
+          <button class="btn-upload" id="editRemoveBtn0" onclick="removeEditPhoto(0)" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:var(--red);display:none">✕ Remover</button>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <label for="editPhotoInput1" id="editThumb1" style="width:90px;height:90px;border-radius:10px;border:1px dashed var(--border);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;transition:border-color .2s">
+            <span style="font-size:22px">➕</span>
+            <span style="font-size:8px;color:var(--muted);margin-top:3px">Extra</span>
+          </label>
+          <input type="file" id="editPhotoInput1" accept="image/*" style="display:none" onchange="handleEditPhoto(1,this)">
+          <button class="btn-upload" id="editRemoveBtn1" onclick="removeEditPhoto(1)" style="font-size:10px;padding:3px 8px;color:var(--red);border-color:var(--red);display:none">✕ Remover</button>
+        </div>
+        <div style="flex:1;font-size:11px;color:var(--muted);line-height:1.6;padding-top:4px">
+          Toque em cada slot para escolher a foto. A <em>Principal</em> aparece no catálogo.
         </div>
       </div>
     </div>
@@ -376,6 +423,49 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     <h3>Gerando PDF</h3>
     <p id="pdfProgressText">Preparando...</p>
     <div class="progress-bar"><div class="progress-fill" id="pdfProgressFill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- BULK DISTRIBUTOR -->
+<div class="bulk-overlay" id="bulkModal" style="display:none">
+  <div class="bulk-header">
+    <h3>🗂 Distribuir Fotos em Lote</h3>
+    <span id="bulkCounter" class="bulk-counter"></span>
+    <button class="btn-cancel" onclick="closeBulkModal()">Fechar</button>
+    <button class="btn-confirm" onclick="saveBulkPhotos()">Salvar tudo</button>
+  </div>
+  <div class="bulk-body">
+    <!-- Queue of uploaded photos -->
+    <div class="bulk-queue">
+      <div class="bulk-queue-header">Fotos (<span id="bulkQueueCount">0</span>)</div>
+      <div class="bulk-queue-list" id="bulkQueueList"></div>
+    </div>
+    <!-- Main area -->
+    <div class="bulk-main">
+      <!-- Selected photo preview -->
+      <div class="bulk-preview">
+        <div class="bulk-preview-placeholder" id="bulkPreviewPlaceholder">
+          <span style="font-size:28px">👈</span>
+          <span>Selecione uma foto</span>
+        </div>
+        <img id="bulkPreviewImg" class="bulk-preview-img" style="display:none" src="" alt="">
+        <div class="bulk-preview-info" id="bulkPreviewInfo">
+          <div style="font-size:11px;color:var(--muted);line-height:1.7">
+            <strong style="color:var(--accent2)">Como usar:</strong><br>
+            1. Selecione uma foto na lista à esquerda<br>
+            2. Clique em uma peça para atribuir<br>
+            3. Ou arraste a foto para cima da peça
+          </div>
+        </div>
+      </div>
+      <!-- Search + grid of items -->
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0">
+        <input class="search-input" id="bulkSearch" placeholder="Filtrar peças..." oninput="filterBulkGrid()" style="flex:1;padding:7px 12px;font-size:12px">
+        <label class="btn-upload" for="bulkFileInput" style="cursor:pointer;font-size:12px;padding:7px 12px">+ Adicionar fotos</label>
+        <input type="file" id="bulkFileInput" accept="image/*" multiple style="display:none" onchange="loadBulkFiles(this)">
+      </div>
+      <div class="bulk-grid" id="bulkGrid"></div>
+    </div>
   </div>
 </div>
 
@@ -900,7 +990,7 @@ function renderGrid(filtered) {
       <div class="select-badge">✓</div>
       <div class="edit-badge" onclick="openEditModal(${item.id},event)" title="Editar">✎</div>
       ${photo
-        ? `<div class="item-thumb"><img src="${photo}" alt="" loading="lazy"></div>`
+        ? `<div class="item-thumb" style="position:relative"><img src="${Array.isArray(photo)?photo[0]:photo}" alt="" loading="lazy">${Array.isArray(photo)&&photo[1]?'<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);border-radius:8px;font-size:9px;padding:1px 5px;color:var(--accent2)">+1</span>':''}</div>`
         : `<div class="no-photo"><span class="no-photo-icon">📷</span><span>sem foto</span></div>`}
       <div class="item-info">
         <div class="item-id">#${item.id}</div>
@@ -990,20 +1080,10 @@ function openEditModal(id, event) {
   buildTagEditor('editOcasiaoTags', 'ocasioes', tags.ocasioes || []);
   buildTagEditor('editOrigemTags', 'origens', tags.origens || []);
 
-  // Populate photo thumbnail
-  const thumb = document.getElementById('editPhotoThumb');
-  const removeBtn = document.getElementById('editPhotoRemoveBtn');
-  thumb._pendingPhoto = null; thumb._removePhoto = false;
-  document.getElementById('editPhotoInput').value = '';
-  if (photos[id]) {
-    thumb.style.border = '1px solid var(--accent)';
-    thumb.innerHTML = `<img src="${photos[id]}" style="width:100%;height:100%;object-fit:cover">`;
-    removeBtn.style.display = 'inline-flex';
-  } else {
-    thumb.style.border = '1px dashed var(--border)';
-    thumb.innerHTML = '<span style="font-size:26px">📷</span><span style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
-    removeBtn.style.display = 'none';
-  }
+  // Populate photo slots
+  const p = photos[id];
+  resetEditPhotoSlot(0, Array.isArray(p) ? p[0] : p);
+  resetEditPhotoSlot(1, Array.isArray(p) ? p[1] : null);
 
   document.getElementById('editModal').style.display = 'flex';
 }
@@ -1023,14 +1103,9 @@ function openNewItemModal() {
   buildTagEditor('editEstacaoTags', 'estacoes', []);
   buildTagEditor('editOcasiaoTags', 'ocasioes', []);
   buildTagEditor('editOrigemTags', 'origens', []);
-  // Reset photo
-  const thumb2 = document.getElementById('editPhotoThumb');
-  const removeBtn2 = document.getElementById('editPhotoRemoveBtn');
-  thumb2._pendingPhoto = null; thumb2._removePhoto = false;
-  document.getElementById('editPhotoInput').value = '';
-  thumb2.style.border = '1px dashed var(--border)';
-  thumb2.innerHTML = '<span style="font-size:26px">📷</span><span style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
-  removeBtn2.style.display = 'none';
+  // Reset photo slots
+  resetEditPhotoSlot(0, null);
+  resetEditPhotoSlot(1, null);
   document.getElementById('editModal').style.display = 'flex';
 }
 
@@ -1106,16 +1181,23 @@ function saveEditModal() {
     wardrobe.push({id: newId, cat, tipo, cor, estampa, obs});
     if (Object.values(tags).some(t => t.length > 0)) itemTags[newId] = tags;
   }
-  // Apply photo changes from modal
-  const thumb = document.getElementById('editPhotoThumb');
+  // Apply photo changes from modal (2 slots)
   const targetId = editingId !== null ? editingId : (Math.max(0, ...wardrobe.map(i => i.id)));
-  if (thumb._pendingPhoto) {
-    photos[targetId] = thumb._pendingPhoto;
-    save('gr_photos', photos);
-  } else if (thumb._removePhoto) {
-    delete photos[targetId];
-    save('gr_photos', photos);
-  }
+  const t0 = document.getElementById('editThumb0');
+  const t1 = document.getElementById('editThumb1');
+  // Get current stored value to merge
+  let cur = photos[targetId];
+  let p0 = Array.isArray(cur) ? cur[0] : (cur || null);
+  let p1 = Array.isArray(cur) ? cur[1] : null;
+  if (t0._pending) p0 = t0._pending;
+  else if (t0._remove) p0 = null;
+  if (t1._pending) p1 = t1._pending;
+  else if (t1._remove) p1 = null;
+  if (p0 && p1) photos[targetId] = [p0, p1];
+  else if (p0) photos[targetId] = p0;
+  else if (p1) photos[targetId] = [null, p1];
+  else delete photos[targetId];
+  save('gr_photos', photos);
 
   saveAll();
   closeEditModal();
@@ -1139,27 +1221,46 @@ function deleteCurrentItem() {
 
 function closeEditModal() { document.getElementById('editModal').style.display = 'none'; }
 
-function handleEditPhoto(input) {
+// slot: 0=principal, 1=extra
+function handleEditPhoto(slot, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = e => {
-    const thumb = document.getElementById('editPhotoThumb');
+    const thumb = document.getElementById('editThumb' + slot);
     thumb.style.border = '1px solid var(--accent)';
     thumb.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
-    document.getElementById('editPhotoRemoveBtn').style.display = 'inline-flex';
-    thumb._pendingPhoto = e.target.result;
+    thumb._pending = e.target.result;
+    thumb._remove = false;
+    document.getElementById('editRemoveBtn' + slot).style.display = 'inline-flex';
   };
   reader.readAsDataURL(file);
 }
 
-function removeEditPhoto() {
-  const thumb = document.getElementById('editPhotoThumb');
+function removeEditPhoto(slot) {
+  const icons = ['📷','➕'], labels = ['Principal','Extra'];
+  const thumb = document.getElementById('editThumb' + slot);
   thumb.style.border = '1px dashed var(--border)';
-  thumb.innerHTML = '<span id="editPhotoIcon" style="font-size:26px">📷</span><span id="editPhotoLabel" style="font-size:9px;color:var(--muted);margin-top:4px">Toque para foto</span>';
-  thumb._pendingPhoto = null;
-  thumb._removePhoto = true;
-  document.getElementById('editPhotoRemoveBtn').style.display = 'none';
-  document.getElementById('editPhotoInput').value = '';
+  thumb.innerHTML = `<span style="font-size:22px">${icons[slot]}</span><span style="font-size:8px;color:var(--muted);margin-top:3px">${labels[slot]}</span>`;
+  thumb._pending = null; thumb._remove = true;
+  document.getElementById('editRemoveBtn' + slot).style.display = 'none';
+  document.getElementById('editPhotoInput' + slot).value = '';
+}
+
+function resetEditPhotoSlot(slot, existingUrl) {
+  const icons = ['📷','➕'], labels = ['Principal','Extra'];
+  const thumb = document.getElementById('editThumb' + slot);
+  const removeBtn = document.getElementById('editRemoveBtn' + slot);
+  thumb._pending = null; thumb._remove = false;
+  document.getElementById('editPhotoInput' + slot).value = '';
+  if (existingUrl) {
+    thumb.style.border = '1px solid var(--accent)';
+    thumb.innerHTML = `<img src="${existingUrl}" style="width:100%;height:100%;object-fit:cover">`;
+    removeBtn.style.display = 'inline-flex';
+  } else {
+    thumb.style.border = '1px dashed var(--border)';
+    thumb.innerHTML = `<span style="font-size:22px">${icons[slot]}</span><span style="font-size:8px;color:var(--muted);margin-top:3px">${labels[slot]}</span>`;
+    removeBtn.style.display = 'none';
+  }
 }
 
 function addNewOption(type) {
@@ -1191,7 +1292,7 @@ function renderUpload(filtered) {
         <div class="sub">${item.cat} · ${item.cor}</div>
       </div>
       <label class="thumb-mini" for="file_${item.id}" title="Foto">
-        ${photo ? `<img src="${photo}" alt="">` : '📷'}
+        ${photo ? `<img src="${Array.isArray(photo)?photo[0]:photo}" alt="">` : '📷'}
       </label>
       <input type="file" id="file_${item.id}" accept="image/*" onchange="handlePhoto(${item.id},this)">
       <button class="btn-upload" onclick="openEditModal(${item.id},event)">✎ Editar</button>
@@ -1505,6 +1606,184 @@ function drawPh(doc,x,y,w,h) {
   doc.setFillColor(26,24,22); doc.rect(x,y,w,h,'F');
   doc.setFont('helvetica','normal'); doc.setFontSize(7); doc.setTextColor(60,57,54);
   doc.text('sem foto',x+w/2,y+h/2+2,{align:'center'});
+}
+
+
+// ===================== BULK DISTRIBUTOR =====================
+let bulkQueue = [];       // [{dataUrl, name, usedFor: null}]
+let bulkSelected = null;  // index into bulkQueue
+let bulkPending = {};     // {itemId: {slot:0|1, dataUrl}}
+
+function openBulkModal() {
+  bulkQueue = []; bulkSelected = null; bulkPending = {};
+  renderBulkQueue();
+  filterBulkGrid();
+  document.getElementById('bulkModal').style.display = 'flex';
+  updateBulkCounter();
+}
+
+function closeBulkModal() {
+  document.getElementById('bulkModal').style.display = 'none';
+}
+
+function loadBulkFiles(input) {
+  const files = Array.from(input.files);
+  let loaded = 0;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      bulkQueue.push({ dataUrl: e.target.result, name: file.name, usedFor: null });
+      loaded++;
+      if (loaded === files.length) {
+        if (bulkSelected === null && bulkQueue.length > 0) bulkSelected = 0;
+        renderBulkQueue();
+        updateBulkPreview();
+        updateBulkCounter();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function renderBulkQueue() {
+  const list = document.getElementById('bulkQueueList');
+  document.getElementById('bulkQueueCount').textContent = bulkQueue.length;
+  if (!bulkQueue.length) {
+    list.innerHTML = `<div style="font-size:11px;color:var(--muted);text-align:center;padding:16px;line-height:1.6">Nenhuma foto.<br>Clique em<br>"+ Adicionar fotos"</div>`;
+    return;
+  }
+  list.innerHTML = bulkQueue.map((q, i) => `
+    <img class="bulk-q-thumb${i===bulkSelected?' active':''}${q.usedFor?' used':''}"
+      src="${q.dataUrl}" data-idx="${i}"
+      title="${q.name}${q.usedFor?' → #'+q.usedFor:''}"
+      onclick="selectBulkPhoto(${i})"
+      draggable="true"
+      ondragstart="onQueueDragStart(event,${i})">
+  `).join('');
+}
+
+function selectBulkPhoto(idx) {
+  bulkSelected = idx;
+  renderBulkQueue();
+  updateBulkPreview();
+}
+
+function updateBulkPreview() {
+  const ph = document.getElementById('bulkPreviewPlaceholder');
+  const img = document.getElementById('bulkPreviewImg');
+  const info = document.getElementById('bulkPreviewInfo');
+  if (bulkSelected !== null && bulkQueue[bulkSelected]) {
+    const q = bulkQueue[bulkSelected];
+    ph.style.display = 'none';
+    img.src = q.dataUrl; img.style.display = 'block';
+    info.innerHTML = `
+      <div style="font-size:12px;color:var(--accent2);font-weight:500;margin-bottom:4px">${q.name}</div>
+      <div style="font-size:11px;color:var(--muted)">${q.usedFor ? '✓ Atribuída à peça #'+q.usedFor : 'Não atribuída ainda'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.6">Clique em uma peça para atribuir esta foto.</div>
+    `;
+  } else {
+    ph.style.display = 'flex'; img.style.display = 'none';
+    info.innerHTML = `<div style="font-size:11px;color:var(--muted);line-height:1.7"><strong style="color:var(--accent2)">Como usar:</strong><br>1. Selecione uma foto na lista à esquerda<br>2. Clique em uma peça para atribuir<br>3. Ou arraste a foto para cima da peça</div>`;
+  }
+}
+
+function filterBulkGrid() {
+  const q = (document.getElementById('bulkSearch').value || '').toLowerCase();
+  const items = q ? wardrobe.filter(i => `${i.tipo} ${i.cor} ${i.cat} ${i.id}`.toLowerCase().includes(q)) : wardrobe;
+  renderBulkGrid(items);
+}
+
+function renderBulkGrid(items) {
+  const grid = document.getElementById('bulkGrid');
+  grid.innerHTML = (items || wardrobe).map(item => {
+    const pending = bulkPending[item.id];
+    const existing = photos[item.id];
+    const hasPhoto = pending || existing;
+    const thumbSrc = pending ? pending.dataUrl : (existing ? (Array.isArray(existing) ? existing[0] : existing) : null);
+    return `<div class="bulk-card${hasPhoto?' has-photo':''}" data-id="${item.id}"
+      onclick="assignBulkPhoto(${item.id})"
+      ondragover="onBulkDragOver(event,this)"
+      ondragleave="onBulkDragLeave(this)"
+      ondrop="onBulkDrop(event,${item.id},this)">
+      <div class="bulk-drop-hint">Soltar aqui</div>
+      <div class="bthumb">${thumbSrc ? `<img src="${thumbSrc}" alt="">` : '📷'}</div>
+      <div class="binfo">
+        <div class="bid">#${item.id}</div>
+        <div class="bname">${item.tipo}</div>
+      </div>
+      <div class="bcheck">✓</div>
+    </div>`;
+  }).join('');
+}
+
+function assignBulkPhoto(itemId) {
+  if (bulkSelected === null) { showToast('Selecione uma foto primeiro'); return; }
+  const q = bulkQueue[bulkSelected];
+  if (!q) return;
+  // Determine slot: if item already has slot 0, assign to slot 1; else slot 0
+  const existing = photos[itemId];
+  const p0 = bulkPending[itemId];
+  const hasSlot0 = p0?.slot === 0 || (existing && (Array.isArray(existing) ? existing[0] : existing));
+  const slot = hasSlot0 ? 1 : 0;
+  bulkPending[itemId] = { slot, dataUrl: q.dataUrl };
+  q.usedFor = itemId;
+  // Advance to next unused photo
+  const nextIdx = bulkQueue.findIndex((b, i) => i > bulkSelected && !b.usedFor);
+  if (nextIdx > -1) bulkSelected = nextIdx;
+  else {
+    const anyUnused = bulkQueue.findIndex(b => !b.usedFor);
+    if (anyUnused > -1) bulkSelected = anyUnused;
+  }
+  renderBulkQueue();
+  updateBulkPreview();
+  filterBulkGrid();
+  updateBulkCounter();
+}
+
+function updateBulkCounter() {
+  const assigned = Object.keys(bulkPending).length;
+  const total = bulkQueue.length;
+  document.getElementById('bulkCounter').innerHTML = `<strong>${assigned}</strong> de <strong>${total}</strong> fotos atribuídas`;
+}
+
+// Drag & drop from queue to grid
+function onQueueDragStart(e, idx) {
+  e.dataTransfer.setData('bulkIdx', idx);
+  bulkSelected = idx;
+  renderBulkQueue();
+}
+
+function onBulkDragOver(e, card) {
+  e.preventDefault();
+  card.classList.add('drag-over');
+}
+function onBulkDragLeave(card) { card.classList.remove('drag-over'); }
+function onBulkDrop(e, itemId, card) {
+  e.preventDefault(); card.classList.remove('drag-over');
+  const idx = parseInt(e.dataTransfer.getData('bulkIdx'));
+  if (!isNaN(idx)) { bulkSelected = idx; assignBulkPhoto(itemId); }
+}
+
+function saveBulkPhotos() {
+  const count = Object.keys(bulkPending).length;
+  if (!count) { showToast('Nenhuma foto atribuída'); return; }
+  Object.entries(bulkPending).forEach(([idStr, {slot, dataUrl}]) => {
+    const id = Number(idStr);
+    const cur = photos[id];
+    let p0 = Array.isArray(cur) ? cur[0] : (cur || null);
+    let p1 = Array.isArray(cur) ? cur[1] : null;
+    if (slot === 0) p0 = dataUrl;
+    else p1 = dataUrl;
+    if (p0 && p1) photos[id] = [p0, p1];
+    else if (p0) photos[id] = p0;
+    else if (p1) photos[id] = [null, p1];
+  });
+  save('gr_photos', photos);
+  closeBulkModal();
+  renderGrid();
+  renderUpload();
+  showToast(`${count} fotos salvas!`);
 }
 
 // ===================== TOAST =====================
