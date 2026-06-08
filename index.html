@@ -253,6 +253,21 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .tag-pick-add:hover{border-color:var(--accent);color:var(--accent)}
 .tag-editor-row{flex-wrap:wrap!important;overflow:visible!important}
 
+.fora-toggle{font-size:12px;padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface);color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;-webkit-tap-highlight-color:transparent}
+.fora-toggle strong{color:var(--accent)}
+.fora-toggle.show-only{border-color:var(--red);color:var(--red)}
+.fora-toggle.show-only strong{color:var(--red)}
+.fora-toggle.show-all{border-color:var(--accent);color:var(--accent)}
+/* card: marca fora de uso */
+.item-card.fora-uso{opacity:.5}
+.item-card.fora-uso::after{content:'FORA DE USO';position:absolute;top:34px;left:7px;background:rgba(192,96,96,.9);color:#fff;font-size:8px;font-weight:600;padding:2px 6px;border-radius:6px;z-index:3;letter-spacing:.03em}
+.fora-check{position:absolute;bottom:7px;right:7px;z-index:4;display:flex;align-items:center;gap:4px;background:rgba(0,0,0,.7);border-radius:12px;padding:3px 8px;cursor:pointer;border:1px solid var(--border);transition:all .15s}
+.fora-check:hover{border-color:var(--red)}
+.fora-check input{accent-color:var(--red);width:14px;height:14px;margin:0;cursor:pointer}
+.fora-check span{font-size:9px;color:var(--muted);white-space:nowrap}
+.item-card.fora-uso .fora-check{background:rgba(192,96,96,.25);border-color:var(--red)}
+.item-card.fora-uso .fora-check span{color:#e0a0a0}
+
 /* RESPONSIVE */
 @media(max-width:860px){
   .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
@@ -299,6 +314,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
       <button class="btn-tool primary" onclick="openNewItemModal()" style="font-size:13px;padding:8px 14px;border-radius:8px">＋ Nova peça</button>
       <span class="filter-count" id="filterCount"></span>
     </div>
+    <div class="filter-row" style="gap:6px">
+      <button class="fora-toggle" id="foraUsoToggle" onclick="cicloForaUso()">👁 Fora de uso: <strong id="foraUsoState">ocultas</strong></button>
+    </div>
     <div class="chip-row" id="corChips">
       <span class="chip-label">Cor</span>
     </div>
@@ -329,6 +347,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
       <button class="btn-tool" onclick="exportJSON()">⬇ Backup JSON</button>
       <button class="btn-tool" onclick="openNewItemModal()">＋ Nova peça</button>
       <button class="btn-tool primary" onclick="openBulkModal()">🗂 Distribuir fotos em lote</button>
+      <button class="btn-tool" onclick="verificarArmazenamento()">🔍 Verificar armazenamento</button>
     </div>
     <div class="upload-search-row">
       <input class="search-input" id="uploadSearch" placeholder="Filtrar peças..." oninput="filterUpload()" style="max-width:300px">
@@ -601,6 +620,20 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
         </label>
       </div>
       <div class="bulk-grid" id="bulkGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DIAGNÓSTICO DE ARMAZENAMENTO -->
+<div class="modal-overlay" id="storageModal" style="display:none">
+  <div class="modal-box">
+    <h3>🔍 Armazenamento na nuvem</h3>
+    <div id="storageReport" style="font-size:13px;line-height:1.7;color:var(--text)">
+      <div style="text-align:center;color:var(--muted);padding:20px">Analisando...</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('storageModal').style.display='none'">Fechar</button>
+      <button class="btn-danger" id="storageCleanBtn" onclick="limparOrfaos()" style="display:none;margin-right:0">🗑 Limpar arquivos órfãos</button>
     </div>
   </div>
 </div>
@@ -1326,7 +1359,7 @@ function showPanel(id, btn) {
   document.getElementById(id).classList.add('active');
   document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  if (id === 'catalogo') { buildFilterUI(); renderGrid(); }
+  if (id === 'catalogo') { buildFilterUI(); filterItems(); }
   if (id === 'upload') renderUpload();
   if (id === 'stylist') { renderSelectedPanel(); buildStylistOcc(); }
   if (id === 'looks') renderLooks();
@@ -1396,15 +1429,20 @@ function renderGrid(filtered) {
     const photo = photos[item.id];
     const sel = selectedItems.has(item.id);
     const tags = itemTags[item.id] || {};
+    const foraUso = (tags.estados || []).includes('Fora de uso');
     const allTags = [
       ...(tags.estados || []).map(t => `<span class="tag estado">${t}</span>`),
       ...(tags.estacoes || []).map(t => `<span class="tag estacao">${t}</span>`),
       ...(tags.ocasioes || []).map(t => `<span class="tag ocas">${t}</span>`),
       ...(tags.origens || []).map(t => `<span class="tag origem">${t}</span>`),
     ].join('');
-    return `<div class="item-card${sel?' selected':''}" data-id="${item.id}">
+    return `<div class="item-card${sel?' selected':''}${foraUso?' fora-uso':''}" data-id="${item.id}">
       <div class="select-badge">✓</div>
       <div class="edit-badge" onclick="openEditModal(${item.id},event)" title="Editar">✎</div>
+      <label class="fora-check" onclick="event.stopPropagation()" title="Marcar como fora de uso (Stylist ignora)">
+        <input type="checkbox" ${foraUso?'checked':''} onchange="toggleForaUso(${item.id}, this.checked)">
+        <span>desconsiderar</span>
+      </label>
       ${photo
         ? `<div class="item-thumb" style="position:relative"><img src="${Array.isArray(photo)?photo[0]:photo}" alt="" loading="lazy">${Array.isArray(photo)&&photo[1]?'<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);border-radius:8px;font-size:9px;padding:1px 5px;color:var(--accent2)">+1</span>':''}</div>`
         : `<div class="no-photo"><span class="no-photo-icon">📷</span><span>sem foto</span></div>`}
@@ -1453,11 +1491,15 @@ function filterItems() {
   const cat = document.getElementById('catFilter').value;
   const photoF = document.getElementById('photoFilter').value;
   const filtered = wardrobe.filter(i => {
+    const tags = itemTags[i.id] || {};
+    const foraUso = (tags.estados || []).includes('Fora de uso');
+    // filtro destacado de fora de uso: 'ocultar' | 'todas' | 'so'
+    if (foraUsoMode === 'ocultar' && foraUso) return false;
+    if (foraUsoMode === 'so' && !foraUso) return false;
     if (q && !matchesQuery(i, q)) return false;
     if (cat && i.cat !== cat) return false;
     if (photoF === 'com' && !photos[i.id]) return false;
     if (photoF === 'sem' && photos[i.id]) return false;
-    const tags = itemTags[i.id] || {};
     // Cor filter: match cor field text OR cor tags
     if (activeFilters.cores && activeFilters.cores.size > 0) {
       const corText = i.cor.toLowerCase();
@@ -1476,6 +1518,32 @@ function filterItems() {
     return true;
   });
   renderGrid(filtered);
+}
+
+// Filtro destacado "Fora de uso": cicla ocultar → todas → só fora de uso
+let foraUsoMode = 'ocultar';
+function cicloForaUso() {
+  foraUsoMode = foraUsoMode === 'ocultar' ? 'todas' : (foraUsoMode === 'todas' ? 'so' : 'ocultar');
+  const btn = document.getElementById('foraUsoToggle');
+  const state = document.getElementById('foraUsoState');
+  btn.classList.remove('show-only','show-all');
+  if (foraUsoMode === 'ocultar') { state.textContent = 'ocultas'; }
+  else if (foraUsoMode === 'todas') { state.textContent = 'visíveis'; btn.classList.add('show-all'); }
+  else { state.textContent = 'só elas'; btn.classList.add('show-only'); }
+  filterItems();
+}
+
+// Marca/desmarca "Fora de uso" direto no card
+function toggleForaUso(id, checked) {
+  if (!itemTags[id]) itemTags[id] = {};
+  if (!itemTags[id].estados) itemTags[id].estados = [];
+  const arr = itemTags[id].estados;
+  const has = arr.includes('Fora de uso');
+  if (checked && !has) arr.push('Fora de uso');
+  else if (!checked && has) itemTags[id].estados = arr.filter(e => e !== 'Fora de uso');
+  saveAll();
+  filterItems();
+  showToast(checked ? `#${id} marcada como fora de uso` : `#${id} voltou pro uso`);
 }
 
 function toggleSelect(id, card) {
@@ -2563,6 +2631,120 @@ function salvarLookDaResposta(idsCsv, nomeSugerido, ocasiaoSugerida) {
   showToast('Revise e salve o look');
 }
 
+// ===================== DIAGNÓSTICO DE ARMAZENAMENTO =====================
+let orfaosEncontrados = [];
+
+async function verificarArmazenamento() {
+  const modal = document.getElementById('storageModal');
+  const rep = document.getElementById('storageReport');
+  const cleanBtn = document.getElementById('storageCleanBtn');
+  cleanBtn.style.display = 'none';
+  orfaosEncontrados = [];
+  rep.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px">Analisando a nuvem...</div>';
+  modal.style.display = 'flex';
+
+  // 1. Lista arquivos de foto no R2
+  let arquivos = [];
+  try {
+    const res = await fetch(CLOUDFLARE_API + '/fotos-lista', { headers: { 'Authorization': API_TOKEN } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    arquivos = d.arquivos || (d.keys||[]).map(k => ({key:k, size:0}));
+  } catch(e) {
+    rep.innerHTML = '<div style="color:var(--red)">Não consegui listar os arquivos. Confira se o Worker foi atualizado.<br><span style="font-size:11px">'+e.message+'</span></div>';
+    return;
+  }
+
+  // 2. Tamanho do JSON principal
+  let jsonKB = 0, jsonTemFotos = false, jsonFotosCount = 0;
+  try {
+    const res = await fetch(CLOUDFLARE_API, { headers: { 'Authorization': API_TOKEN } });
+    const txt = await res.text();
+    jsonKB = (txt.length / 1024);
+    const data = JSON.parse(txt);
+    if (data.photos && Object.keys(data.photos).length) {
+      jsonTemFotos = true;
+      jsonFotosCount = Object.keys(data.photos).length;
+    }
+  } catch(e) {}
+
+  // 3. Quais chaves são válidas (peças e looks existentes)
+  const idsValidos = new Set(wardrobe.map(i => i.id));
+  const looksValidos = new Set(looks.map(l => String(l.id)));
+
+  // 4. Classifica cada arquivo
+  let totalBytes = 0, usados = 0;
+  const orfaos = [];
+  arquivos.forEach(a => {
+    totalBytes += a.size || 0;
+    const mItem = a.key.match(/^item-(\d+)-(\d)$/);
+    const mLook = a.key.match(/^look-(.+)$/);
+    let orfao = false;
+    if (mItem) {
+      if (!idsValidos.has(Number(mItem[1]))) orfao = true;
+    } else if (mLook) {
+      if (!looksValidos.has(mLook[1])) orfao = true;
+    } else {
+      orfao = true; // chave em formato desconhecido
+    }
+    if (orfao) orfaos.push(a); else usados++;
+  });
+  orfaosEncontrados = orfaos;
+
+  const fmtMB = b => (b/1048576).toFixed(2) + ' MB';
+  const orfaosKB = orfaos.reduce((s,a)=>s+(a.size||0),0);
+
+  let html = '';
+  html += linha('Arquivos de foto no R2', arquivos.length);
+  html += linha('Tamanho total das fotos', fmtMB(totalBytes));
+  html += linha('Peças com foto (no app)', wardrobe.filter(i => photos[i.id]).length);
+  html += linha('Looks com foto (no app)', looks.filter(l => l.foto).length);
+  html += '<hr style="border:none;border-top:1px solid var(--border);margin:12px 0">';
+  html += linha('JSON principal', jsonKB.toFixed(1) + ' KB');
+
+  if (jsonTemFotos) {
+    html += '<div style="background:#2a1e14;border:1px solid #5a4020;border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#e0b080">⚠ O JSON principal ainda tem <b>'+jsonFotosCount+' fotos embutidas</b> (formato antigo). Isso duplica e incha o backup. Clique em "Corrigir JSON" para limpar — as fotos já estão salvas separadamente.</div>';
+    html += '<button class="btn-upload" onclick="corrigirJsonAntigo()" style="margin-top:8px;color:var(--accent);border-color:var(--accent)">🔧 Corrigir JSON (remover fotos embutidas)</button>';
+  }
+
+  if (orfaos.length) {
+    html += '<div style="background:#2a1414;border:1px solid #5a2020;border-radius:8px;padding:10px;margin-top:12px;font-size:12px;color:#e09090"><b>'+orfaos.length+' arquivos órfãos</b> ('+fmtMB(orfaosKB)+') — fotos no R2 que não pertencem a nenhuma peça ou look atual (provavelmente de itens que você apagou).</div>';
+    html += '<details style="margin-top:6px"><summary style="font-size:11px;color:var(--muted);cursor:pointer">ver lista</summary><div style="font-size:10px;color:var(--muted);max-height:120px;overflow:auto;margin-top:6px">'+orfaos.map(a=>a.key+' ('+Math.round((a.size||0)/1024)+'KB)').join('<br>')+'</div></details>';
+    cleanBtn.style.display = 'block';
+  } else {
+    html += '<div style="background:#142a18;border:1px solid #205a30;border-radius:8px;padding:10px;margin-top:12px;font-size:12px;color:#90e0a0">✓ Nenhum arquivo órfão. Sua base está limpa!</div>';
+  }
+
+  rep.innerHTML = html;
+}
+
+function linha(label, val) {
+  return `<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:var(--muted)">${label}</span><strong style="color:var(--accent2)">${val}</strong></div>`;
+}
+
+async function limparOrfaos() {
+  if (!orfaosEncontrados.length) return;
+  if (!confirm('Apagar '+orfaosEncontrados.length+' arquivos órfãos? Eles não pertencem a nenhuma peça atual. Isso não pode ser desfeito.')) return;
+  const btn = document.getElementById('storageCleanBtn');
+  btn.disabled = true; btn.textContent = 'Limpando...';
+  let ok = 0;
+  for (const a of orfaosEncontrados) {
+    try { await delFoto(a.key); ok++; } catch(e) {}
+  }
+  btn.disabled = false; btn.textContent = '🗑 Limpar arquivos órfãos';
+  showToast(ok + ' arquivos órfãos removidos');
+  verificarArmazenamento(); // re-analisa
+}
+
+async function corrigirJsonAntigo() {
+  // Re-salva o estado SEM as fotos embutidas (elas já estão separadas no R2)
+  localStorage.setItem('gr_migrado_fotos', '1');
+  showToast('Corrigindo JSON...');
+  await flushCloudSync();
+  showToast('✓ JSON corrigido! Backup agora é leve.');
+  verificarArmazenamento();
+}
+
 // ===================== TOAST =====================
 let toastTimer;
 function showToast(msg) {
@@ -2574,10 +2756,10 @@ function showToast(msg) {
 document.addEventListener('DOMContentLoaded', async function() {
   loadLocal();          // instantâneo, do aparelho
   buildFilterUI();
-  renderGrid();
+  filterItems();
   // Tenta puxar da nuvem em background e re-renderiza se vier algo
   const got = await loadCloud();
-  if (got) { buildFilterUI(); renderGrid(); if(document.getElementById('upload').classList.contains('active')) renderUpload(); }
+  if (got) { buildFilterUI(); filterItems(); if(document.getElementById('upload').classList.contains('active')) renderUpload(); }
 });
 
 // Salva ao sair/trocar de app (mobile) pra não perder nada
