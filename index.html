@@ -633,6 +633,7 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="document.getElementById('storageModal').style.display='none'">Fechar</button>
+      <button class="btn-confirm" onclick="recarregarFotos()" style="background:none;border:1px solid var(--accent);color:var(--accent)">🔄 Recarregar fotos da nuvem</button>
       <button class="btn-danger" id="storageCleanBtn" onclick="limparOrfaos()" style="display:none;margin-right:0">🗑 Limpar arquivos órfãos</button>
     </div>
   </div>
@@ -1144,6 +1145,7 @@ function saveAll() {
 let cloudSyncTimer = null;
 let cloudSyncing = false;
 let pendingSync = false;
+let fotosCarregando = false;
 function scheduleCloudSync() {
   if (cloudSyncTimer) clearTimeout(cloudSyncTimer);
   cloudSyncTimer = setTimeout(doCloudSync, 1500);
@@ -1157,6 +1159,7 @@ function flushCloudSync() {
 }
 
 async function doCloudSync() {
+  if (fotosCarregando) { pendingSync = true; setTimeout(() => { if(!fotosCarregando) doCloudSync(); }, 1500); return; }
   if (cloudSyncing) { pendingSync = true; return; }
   cloudSyncing = true;
   updateSyncStatus('saving');
@@ -1284,45 +1287,68 @@ function lookPhotosManifest() {
 
 // Carrega fotos individuais do R2 depois que os dados chegaram
 async function carregarFotosDaNuvem(lookPhotoKeys) {
-  // Descobre quais fotos de peça existem
+  fotosCarregando = true;   // trava o sync enquanto carrega (não sobrescreve a nuvem)
+  // Descobre quais fotos existem no R2
   let keys = [];
   try {
     const res = await fetch(CLOUDFLARE_API + '/fotos-lista', { headers: { 'Authorization': API_TOKEN } });
     if (res.ok) { const d = await res.json(); keys = d.keys || []; }
   } catch(e) { console.warn('lista de fotos falhou', e); }
 
-  // Carrega fotos de peças
-  let mudou = false;
-  for (const key of keys) {
-    const m = key.match(/^item-(\d+)-(\d)$/);
-    if (!m) continue;
-    const id = Number(m[1]), slot = Number(m[2]);
-    const url = await getFoto(key);
-    if (!url) continue;
-    const cur = photos[id];
-    if (slot === 0) {
-      if (Array.isArray(cur)) photos[id] = [url, cur[1]];
-      else photos[id] = url;
-    } else {
-      const p0 = Array.isArray(cur) ? cur[0] : (cur || null);
-      photos[id] = [p0, url];
+  // junta chaves de peças + de looks
+  const itemKeys = keys.filter(k => /^item-\d+-\d$/.test(k));
+  const lookKeys = [...new Set([...(lookPhotoKeys||[]), ...keys.filter(k => /^look-/.test(k))])];
+  const todas = [...itemKeys, ...lookKeys];
+  const total = todas.length;
+  if (!total) { fotosCarregando = false; return; }
+
+  let baixadas = 0, falhas = 0, mudou = false;
+  updateSyncStatus('loading');
+
+  // Baixa em paralelo, em lotes de 6 (rápido e sem travar)
+  const LOTE = 6;
+  for (let i = 0; i < todas.length; i += LOTE) {
+    const fatia = todas.slice(i, i + LOTE);
+    const resultados = await Promise.all(fatia.map(async key => {
+      try { return { key, url: await getFoto(key) }; }
+      catch(e) { return { key, url: null, erro: true }; }
+    }));
+    resultados.forEach(({ key, url, erro }) => {
+      if (erro) { falhas++; return; }
+      if (!url) return;  // vazio: NÃO sobrescreve nada
+      const mItem = key.match(/^item-(\d+)-(\d)$/);
+      if (mItem) {
+        const id = Number(mItem[1]), slot = Number(mItem[2]);
+        const cur = photos[id];
+        if (slot === 0) {
+          if (Array.isArray(cur)) photos[id] = [url, cur[1]];
+          else photos[id] = url;
+        } else {
+          const p0 = Array.isArray(cur) ? cur[0] : (cur || null);
+          photos[id] = [p0, url];
+        }
+        mudou = true;
+      } else {
+        const lookId = key.slice('look-'.length);
+        const look = looks.find(l => String(l.id) === lookId);
+        if (look) { look.foto = url; mudou = true; }
+      }
+      baixadas++;
+    });
+    // atualiza a tela progressivamente conforme baixa
+    if (mudou) {
+      renderGrid();
+      if (document.getElementById('upload').classList.contains('active')) renderUpload();
+      if (document.getElementById('looks').classList.contains('active')) renderLooks();
     }
-    mudou = true;
   }
-  // Carrega fotos de looks
-  for (const key of (lookPhotoKeys || [])) {
-    const url = await getFoto(key);
-    if (!url) continue;
-    const lookId = key.slice('look-'.length);
-    const look = looks.find(l => String(l.id) === lookId);
-    if (look) { look.foto = url; mudou = true; }
-  }
+
   if (mudou) {
     try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
-    renderGrid();
-    if (document.getElementById('upload').classList.contains('active')) renderUpload();
-    if (document.getElementById('looks').classList.contains('active')) renderLooks();
   }
+  fotosCarregando = false;
+  if (falhas) showToast(`${baixadas} fotos carregadas, ${falhas} falharam (tente recarregar)`);
+  updateSyncStatus('ok');
 }
 
 // MIGRAÇÃO única: pega fotos que estavam embutidas no JSON antigo e sobe como arquivos
@@ -2632,6 +2658,13 @@ function salvarLookDaResposta(idsCsv, nomeSugerido, ocasiaoSugerida) {
 }
 
 // ===================== DIAGNÓSTICO DE ARMAZENAMENTO =====================
+async function recarregarFotos() {
+  showToast('Recarregando todas as fotos da nuvem...');
+  await carregarFotosDaNuvem(lookPhotosManifest());
+  showToast('✓ Fotos recarregadas!');
+  if (document.getElementById('storageModal').style.display === 'flex') verificarArmazenamento();
+}
+
 let orfaosEncontrados = [];
 
 async function verificarArmazenamento() {
