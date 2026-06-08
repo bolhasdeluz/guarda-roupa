@@ -633,7 +633,8 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="document.getElementById('storageModal').style.display='none'">Fechar</button>
-      <button class="btn-confirm" onclick="recarregarFotos()" style="background:none;border:1px solid var(--accent);color:var(--accent)">🔄 Recarregar fotos da nuvem</button>
+      <button class="btn-confirm" onclick="subirFotosLocais()" style="background:var(--accent);border:none;color:var(--bg)">⬆ Subir fotos locais p/ nuvem</button>
+      <button class="btn-confirm" onclick="recarregarFotos()" style="background:none;border:1px solid var(--accent);color:var(--accent)">🔄 Recarregar da nuvem</button>
       <button class="btn-danger" id="storageCleanBtn" onclick="limparOrfaos()" style="display:none;margin-right:0">🗑 Limpar arquivos órfãos</button>
     </div>
   </div>
@@ -2658,6 +2659,41 @@ function salvarLookDaResposta(idsCsv, nomeSugerido, ocasiaoSugerida) {
 }
 
 // ===================== DIAGNÓSTICO DE ARMAZENAMENTO =====================
+async function subirFotosLocais() {
+  // Sobe pro R2 todas as fotos que o aparelho tem em memória.
+  // Garante que a nuvem fique com o conjunto completo deste aparelho.
+  const ids = Object.keys(photos).filter(id => photos[id]);
+  if (!ids.length) { showToast('Nenhuma foto local para subir'); return; }
+  if (!confirm('Subir as fotos deste aparelho para a nuvem? Isso completa o que faltar no R2. (' + ids.length + ' peças com foto)')) return;
+  let ok = 0, falhas = 0;
+  showToast('Subindo fotos... aguarde.');
+  // marca todas como sujas e sobe em lotes paralelos
+  const tarefas = [];
+  ids.forEach(id => {
+    const p = photos[id];
+    if (Array.isArray(p)) {
+      if (p[0]) tarefas.push(['item-' + id + '-0', p[0]]);
+      if (p[1]) tarefas.push(['item-' + id + '-1', p[1]]);
+    } else if (p) {
+      tarefas.push(['item-' + id + '-0', p]);
+    }
+  });
+  // fotos de looks também
+  looks.forEach(l => { if (l.foto) tarefas.push(['look-' + l.id, l.foto]); });
+
+  const LOTE = 5;
+  for (let i = 0; i < tarefas.length; i += LOTE) {
+    const fatia = tarefas.slice(i, i + LOTE);
+    await Promise.all(fatia.map(async ([key, val]) => {
+      try { await putFoto(key, val); ok++; } catch(e) { falhas++; }
+    }));
+    updateSyncStatus('saving');
+  }
+  updateSyncStatus(falhas ? 'error' : 'ok');
+  showToast(`✓ ${ok} fotos enviadas${falhas?', '+falhas+' falharam':''}`);
+  if (document.getElementById('storageModal').style.display === 'flex') verificarArmazenamento();
+}
+
 async function recarregarFotos() {
   showToast('Recarregando todas as fotos da nuvem...');
   await carregarFotosDaNuvem(lookPhotosManifest());
