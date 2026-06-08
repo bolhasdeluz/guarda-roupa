@@ -1044,7 +1044,11 @@ async function loadCloud() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     if (data && (data.wardrobe || data.photos || data.itemTags)) {
-      if (data.photos) photos = data.photos;
+      // MIGRAÇÃO: se o JSON antigo ainda tem fotos embutidas, migra pra arquivos separados
+      if (data.photos && Object.keys(data.photos).length) {
+        photos = data.photos;
+        migrarFotosAntigas(data.photos);   // sobe cada foto como arquivo e limpa o JSON
+      }
       if (data.selectedItems) selectedItems = new Set(data.selectedItems);
       if (data.vocab) {
         Object.keys(data.vocab).forEach(k => {
@@ -1063,6 +1067,8 @@ async function loadCloud() {
       }
       if (data.wardrobe && Array.isArray(data.wardrobe) && data.wardrobe.length > 0) wardrobe = data.wardrobe;
       if (data.looks && Array.isArray(data.looks)) looks = data.looks;
+      // carrega fotos individuais do R2 em background (não bloqueia a tela)
+      carregarFotosDaNuvem(data.lookPhotos || []);
       // Persiste a cópia da nuvem localmente
       try {
         localStorage.setItem('gr_photos', JSON.stringify(photos));
@@ -1122,7 +1128,9 @@ async function doCloudSync() {
   cloudSyncing = true;
   updateSyncStatus('saving');
   const estado = {
-    photos, selectedItems: [...selectedItems], vocab, itemTags, wardrobe, looks,
+    // photos NÃO entram aqui — cada foto é um arquivo separado no R2
+    selectedItems: [...selectedItems], vocab, itemTags, wardrobe, looks,
+    lookPhotos: lookPhotosManifest(),  // fotos de look também separadas
     savedAt: new Date().toISOString()
   };
   const payload = JSON.stringify(estado);
@@ -1162,6 +1170,155 @@ function updateSyncStatus(state) {
   el.textContent = txt;
   el.style.color = color;
 }
+
+// ═══════════════ FOTOS COMO ARQUIVOS SEPARADOS (R2) ═══════════════
+// photos[] continua em memória {id: dataUrl|[d0,d1]} pra toda a UI funcionar igual.
+// Mas cada foto é salva/lida individualmente em /foto/<chave>.
+
+let dirtyPhotos = new Set();   // chaves de fotos que mudaram e precisam subir
+let photoSyncTimer = null;
+
+// chave de armazenamento por peça/slot: "item-<id>-0", "item-<id>-1", "look-<id>"
+function photoKeysForItem(id) { return ['item-' + id + '-0', 'item-' + id + '-1']; }
+
+// Marca foto(s) de uma peça como suja(s) e agenda upload
+function marcarFotoSuja(id) {
+  photoKeysForItem(id).forEach(k => dirtyPhotos.add(k));
+  agendarSyncFotos();
+}
+function marcarLookFotoSuja(lookId) {
+  dirtyPhotos.add('look-' + lookId);
+  agendarSyncFotos();
+}
+
+function agendarSyncFotos() {
+  if (photoSyncTimer) clearTimeout(photoSyncTimer);
+  photoSyncTimer = setTimeout(syncFotosSujas, 800);
+}
+
+async function putFoto(key, dataUrl) {
+  const res = await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'text/plain', 'Authorization': API_TOKEN },
+    body: dataUrl || ''
+  });
+  if (!res.ok) throw new Error('PUT foto ' + key + ' HTTP ' + res.status);
+}
+async function delFoto(key) {
+  try {
+    await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
+      method: 'DELETE', headers: { 'Authorization': API_TOKEN }
+    });
+  } catch(e) {}
+}
+async function getFoto(key) {
+  const res = await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
+    headers: { 'Authorization': API_TOKEN }
+  });
+  if (!res.ok) return null;
+  const txt = await res.text();
+  return txt && txt.startsWith('data:') ? txt : null;
+}
+
+// Sobe todas as fotos sujas, uma a uma (cada arquivo é pequeno)
+async function syncFotosSujas() {
+  if (!dirtyPhotos.size) return;
+  const keys = [...dirtyPhotos]; dirtyPhotos.clear();
+  updateSyncStatus('saving');
+  for (const key of keys) {
+    try {
+      if (key.startsWith('item-')) {
+        const m = key.match(/^item-(\d+)-(\d)$/);
+        if (!m) continue;
+        const id = Number(m[1]), slot = Number(m[2]);
+        const p = photos[id];
+        const val = Array.isArray(p) ? p[slot] : (slot === 0 ? p : null);
+        if (val) await putFoto(key, val); else await delFoto(key);
+      } else if (key.startsWith('look-')) {
+        const lookId = key.slice('look-'.length);
+        const look = looks.find(l => String(l.id) === lookId);
+        if (look && look.foto) await putFoto(key, look.foto); else await delFoto(key);
+      }
+    } catch(e) { console.warn('Falha ao subir foto', key, e); dirtyPhotos.add(key); }
+  }
+  updateSyncStatus(dirtyPhotos.size ? 'error' : 'ok');
+}
+
+// Manifesto das fotos de look (quais looks têm foto) — vai no JSON
+function lookPhotosManifest() {
+  return looks.filter(l => l.foto).map(l => 'look-' + l.id);
+}
+
+// Carrega fotos individuais do R2 depois que os dados chegaram
+async function carregarFotosDaNuvem(lookPhotoKeys) {
+  // Descobre quais fotos de peça existem
+  let keys = [];
+  try {
+    const res = await fetch(CLOUDFLARE_API + '/fotos-lista', { headers: { 'Authorization': API_TOKEN } });
+    if (res.ok) { const d = await res.json(); keys = d.keys || []; }
+  } catch(e) { console.warn('lista de fotos falhou', e); }
+
+  // Carrega fotos de peças
+  let mudou = false;
+  for (const key of keys) {
+    const m = key.match(/^item-(\d+)-(\d)$/);
+    if (!m) continue;
+    const id = Number(m[1]), slot = Number(m[2]);
+    const url = await getFoto(key);
+    if (!url) continue;
+    const cur = photos[id];
+    if (slot === 0) {
+      if (Array.isArray(cur)) photos[id] = [url, cur[1]];
+      else photos[id] = url;
+    } else {
+      const p0 = Array.isArray(cur) ? cur[0] : (cur || null);
+      photos[id] = [p0, url];
+    }
+    mudou = true;
+  }
+  // Carrega fotos de looks
+  for (const key of (lookPhotoKeys || [])) {
+    const url = await getFoto(key);
+    if (!url) continue;
+    const lookId = key.slice('look-'.length);
+    const look = looks.find(l => String(l.id) === lookId);
+    if (look) { look.foto = url; mudou = true; }
+  }
+  if (mudou) {
+    try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+    renderGrid();
+    if (document.getElementById('upload').classList.contains('active')) renderUpload();
+    if (document.getElementById('looks').classList.contains('active')) renderLooks();
+  }
+}
+
+// MIGRAÇÃO única: pega fotos que estavam embutidas no JSON antigo e sobe como arquivos
+async function migrarFotosAntigas(oldPhotos) {
+  if (localStorage.getItem('gr_migrado_fotos') === '1') return;
+  showToast('Migrando fotos para o novo formato...');
+  const ids = Object.keys(oldPhotos);
+  for (const id of ids) {
+    const p = oldPhotos[id];
+    try {
+      if (Array.isArray(p)) {
+        if (p[0]) await putFoto('item-' + id + '-0', p[0]);
+        if (p[1]) await putFoto('item-' + id + '-1', p[1]);
+      } else if (p) {
+        await putFoto('item-' + id + '-0', p);
+      }
+    } catch(e) { console.warn('migração falhou pra', id, e); }
+  }
+  // sobe fotos de looks que estavam embutidas
+  for (const look of looks) {
+    if (look.foto) { try { await putFoto('look-' + look.id, look.foto); } catch(e) {} }
+  }
+  localStorage.setItem('gr_migrado_fotos', '1');
+  // re-salva o estado já SEM as fotos no JSON (vai ficar pequeno)
+  flushCloudSync();
+  showToast('✓ Fotos migradas! Agora o backup é leve.');
+}
+
+
 
 // ===================== PANELS =====================
 function showPanel(id, btn) {
@@ -1484,7 +1641,8 @@ async function saveEditModal() {
   else if (p0) photos[targetId] = p0;
   else if (p1) photos[targetId] = [null, p1];
   else delete photos[targetId];
-  save('gr_photos', photos);
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+  marcarFotoSuja(targetId);
 
   saveAll();
   closeEditModal();
@@ -1497,6 +1655,7 @@ async function saveEditModal() {
 function deleteCurrentItem() {
   if (!confirm(`Excluir peça #${editingId}? Não pode ser desfeito.`)) return;
   wardrobe = wardrobe.filter(i => i.id !== editingId);
+  photoKeysForItem(editingId).forEach(k => delFoto(k));
   delete photos[editingId];
   delete itemTags[editingId];
   selectedItems.delete(editingId);
@@ -1633,11 +1792,14 @@ async function handlePhoto(id, input) {
   try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
   renderUpload(); renderGrid();
   showToast(`Foto da peça #${id} salva! Sincronizando...`);
-  await flushCloudSync();   // salva na nuvem JÁ, não espera o debounce
+  marcarFotoSuja(id);
+  await syncFotosSujas();   // sobe a foto JÁ (arquivo separado, pequeno)
 }
 
 function removePhoto(id) {
-  delete photos[id]; save('gr_photos', photos);
+  delete photos[id];
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+  marcarFotoSuja(id);
   renderUpload(); renderGrid();
 }
 
@@ -1706,7 +1868,7 @@ async function askStylist() {
       ).join('\n')
     : '';
 
-  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}${looksCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima. Proponha combinações NOVAS, diferentes das já registradas no histórico. Se a sua sugestão ficar parecida com um look já registrado, avise mencionando o número (ex: "parecido com o seu Look #2").`;
+  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}${looksCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima. Proponha combinações NOVAS, diferentes das já registradas no histórico. Se a sua sugestão ficar parecida com um look já registrado, avise mencionando o número (ex: "parecido com o seu Look #2"). Ao sugerir um look, comece a sugestão com uma linha no formato "Look: <nome curto do look> | <ocasião>" para facilitar salvar.`;
 
   addMessage('user', `${occCtx ? 'Ocasião: '+occasions.join(', ')+'\n' : ''}${userQ}`);
   document.getElementById('userPrompt').value = '';
@@ -1754,9 +1916,14 @@ function addMessage(role, text, showPhotos) {
           <div class="sp-label">#${item.id}</div>
         </div>`;
       }).join('') + '</div>';
-      // Botão pra salvar essa sugestão como look
+      // Botão pra salvar essa sugestão como look — tenta extrair nome/ocasião do texto
       const idsCsv = cited.map(i => i.id).join(',');
-      html += `<button class="btn-upload" onclick="salvarLookDaResposta('${idsCsv}')" style="margin-top:8px;font-size:12px;padding:7px 12px;color:var(--accent);border-color:var(--accent)">💾 Salvar este look (${cited.length} peças)</button>`;
+      // procura padrões "Look: Nome | Ocasião" ou "**Nome**" no início
+      let nome = '', ocasiao = '';
+      const lookLine = text.match(/look[:\s]+([^\n|]{3,50})(?:\s*\|\s*([^\n]{2,30}))?/i);
+      if (lookLine) { nome = (lookLine[1]||'').trim(); ocasiao = (lookLine[2]||'').trim(); }
+      const esc = s => (s||'').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      html += `<button class="btn-upload" onclick="salvarLookDaResposta('${idsCsv}','${esc(nome)}','${esc(ocasiao)}')" style="margin-top:8px;font-size:12px;padding:7px 12px;color:var(--accent);border-color:var(--accent)">💾 Salvar este look (${cited.length} peças)</button>`;
     }
   }
   div.innerHTML = html;
@@ -2161,13 +2328,14 @@ function saveBulkPhotos() {
     if (p0 && p1) photos[id] = [p0, p1];
     else if (p0) photos[id] = p0;
     else if (p1) photos[id] = [null, p1];
+    marcarFotoSuja(id);
   });
   try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
   closeBulkModal();
   renderGrid();
   renderUpload();
   showToast(`${count} fotos salvas! Sincronizando...`);
-  flushCloudSync();
+  syncFotosSujas();
 }
 
 // ===================== IDENTIFICAR PEÇA COM IA =====================
@@ -2353,23 +2521,29 @@ function saveLook() {
   const nome = document.getElementById('lookNome').value.trim();
   const ocasiao = document.getElementById('lookOcasiao').value.trim();
   const notas = document.getElementById('lookNotas').value.trim();
+  let savedId;
   if (editingLookId !== null) {
     const look = looks.find(l => l.id === editingLookId);
     Object.assign(look, { nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto });
+    savedId = look.id;
   } else {
     const newId = Math.max(0, ...looks.map(l => l.id||0)) + 1;
     looks.push({ id: newId, nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto, criadoEm: new Date().toISOString() });
+    savedId = newId;
   }
   saveAll();
   closeLookModal();
   renderLooks();
   showToast('Look salvo! Sincronizando...');
+  marcarLookFotoSuja(savedId);
   flushCloudSync();
+  syncFotosSujas();
 }
 
 function deleteCurrentLook() {
   if (editingLookId === null) return;
   if (!confirm('Excluir este look?')) return;
+  delFoto('look-' + editingLookId);
   looks = looks.filter(l => l.id !== editingLookId);
   saveAll();
   closeLookModal();
@@ -2379,10 +2553,12 @@ function deleteCurrentLook() {
 }
 
 // Salvar look a partir de uma sugestão do Stylist (botão na resposta)
-function salvarLookDaResposta(idsCsv) {
+function salvarLookDaResposta(idsCsv, nomeSugerido, ocasiaoSugerida) {
   const ids = idsCsv.split(',').map(Number).filter(Boolean);
   openLookModal(null);
   lookDraftPieces = ids;
+  if (nomeSugerido) document.getElementById('lookNome').value = nomeSugerido;
+  if (ocasiaoSugerida) document.getElementById('lookOcasiao').value = ocasiaoSugerida;
   renderLookSelected();
   showToast('Revise e salve o look');
 }
