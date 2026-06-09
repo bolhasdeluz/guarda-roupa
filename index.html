@@ -336,6 +336,21 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     <div class="chip-row" id="origemChips">
       <span class="chip-label">Origem</span>
     </div>
+    <div class="filter-row" style="gap:6px">
+      <button class="fora-toggle" id="batchModeBtn" onclick="toggleBatchMode()">☑️ Selecionar em lote</button>
+    </div>
+  </div>
+  <!-- Barra de ações em lote (aparece no modo seleção) -->
+  <div id="batchBar" style="display:none;position:sticky;top:0;z-index:90;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:10px 12px;margin-bottom:12px;display:none;flex-wrap:wrap;gap:8px;align-items:center">
+    <strong id="batchCount" style="color:var(--accent);font-size:13px">0 selecionadas</strong>
+    <button class="btn-tool" onclick="batchSelecionarTodas()" style="font-size:12px">Selecionar todas (visíveis)</button>
+    <button class="btn-tool" onclick="batchLimparSelecao()" style="font-size:12px">Limpar</button>
+    <span style="flex:1"></span>
+    <button class="btn-tool" onclick="batchForaUso(true)" style="font-size:12px">👁 Marcar fora de uso</button>
+    <button class="btn-tool" onclick="batchForaUso(false)" style="font-size:12px">↩ Tirar fora de uso</button>
+    <button class="btn-tool" onclick="batchAddTag()" style="font-size:12px">＋ Adicionar tag</button>
+    <button class="btn-tool" onclick="batchRemoveTag()" style="font-size:12px">－ Remover tag</button>
+    <button class="btn-tool" onclick="batchDeletar()" style="font-size:12px;color:var(--red);border-color:var(--red)">🗑 Deletar</button>
   </div>
   <div class="grid" id="itemGrid"></div>
 </div>
@@ -1600,6 +1615,142 @@ function toggleSelect(id, card) {
   else { selectedItems.add(id); card.classList.add('selected'); }
   save('gr_selected', [...selectedItems]);
   renderSelectedPanel();
+  if (batchMode) updateBatchCount();
+}
+
+// ===================== EDIÇÃO EM LOTE =====================
+let batchMode = false;
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  const bar = document.getElementById('batchBar');
+  const btn = document.getElementById('batchModeBtn');
+  if (batchMode) {
+    bar.style.display = 'flex';
+    btn.classList.add('show-all');
+    btn.innerHTML = '☑️ Modo seleção ATIVO (toque pra sair)';
+    showToast('Toque nas peças para selecionar');
+  } else {
+    bar.style.display = 'none';
+    btn.classList.remove('show-all');
+    btn.innerHTML = '☑️ Selecionar em lote';
+  }
+  updateBatchCount();
+}
+
+function updateBatchCount() {
+  const el = document.getElementById('batchCount');
+  if (el) el.textContent = selectedItems.size + (selectedItems.size === 1 ? ' selecionada' : ' selecionadas');
+}
+
+function batchSelecionarTodas() {
+  // seleciona todas as peças VISÍVEIS no grid atual
+  document.querySelectorAll('#itemGrid .item-card').forEach(card => {
+    const id = Number(card.dataset.id);
+    selectedItems.add(id);
+    card.classList.add('selected');
+  });
+  save('gr_selected', [...selectedItems]);
+  updateBatchCount();
+  renderSelectedPanel();
+}
+
+function batchLimparSelecao() {
+  selectedItems.clear();
+  save('gr_selected', []);
+  document.querySelectorAll('#itemGrid .item-card.selected').forEach(c => c.classList.remove('selected'));
+  updateBatchCount();
+  renderSelectedPanel();
+}
+
+function batchExigeSelecao() {
+  if (!selectedItems.size) { showToast('Selecione pelo menos uma peça'); return false; }
+  return true;
+}
+
+function batchForaUso(marcar) {
+  if (!batchExigeSelecao()) return;
+  const ids = [...selectedItems];
+  if (!confirm(`${marcar ? 'Marcar' : 'Tirar'} "Fora de uso" em ${ids.length} peça(s)?`)) return;
+  ids.forEach(id => {
+    if (!itemTags[id]) itemTags[id] = {};
+    if (!itemTags[id].estados) itemTags[id].estados = [];
+    const arr = itemTags[id].estados;
+    const has = arr.includes('Fora de uso');
+    if (marcar && !has) arr.push('Fora de uso');
+    else if (!marcar && has) itemTags[id].estados = arr.filter(e => e !== 'Fora de uso');
+  });
+  saveAll();
+  filterItems();
+  flushCloudSync();
+  showToast(`${ids.length} peça(s) atualizada(s)`);
+}
+
+function batchAddTag() {
+  if (!batchExigeSelecao()) return;
+  escolherTagLote('add');
+}
+function batchRemoveTag() {
+  if (!batchExigeSelecao()) return;
+  escolherTagLote('remove');
+}
+
+// pergunta categoria de tag e valor, aplica em lote
+function escolherTagLote(modo) {
+  const grupos = { '1':'estados', '2':'estacoes', '3':'ocasioes', '4':'origens', '5':'cores' };
+  const nomes = { estados:'Estado', estacoes:'Estação', ocasioes:'Ocasião', origens:'Origem', cores:'Cor' };
+  const escolha = prompt('Qual tipo de tag?\n1. Estado\n2. Estação\n3. Ocasião\n4. Origem\n5. Cor\n\nDigite o número:');
+  const vocabKey = grupos[(escolha||'').trim()];
+  if (!vocabKey) return;
+  const opcoes = vocab[vocabKey] || [];
+  const lista = opcoes.map((v,i) => `${i+1}. ${v}`).join('\n');
+  const val = prompt(`${modo==='add'?'Adicionar':'Remover'} qual ${nomes[vocabKey]}?\n\n${lista}\n\nDigite o número ou escreva:`);
+  if (!val || !val.trim()) return;
+  let tag = val.trim();
+  const num = parseInt(tag);
+  if (!isNaN(num) && num >= 1 && num <= opcoes.length) tag = opcoes[num-1];
+  if (modo === 'add' && !vocab[vocabKey].includes(tag)) vocab[vocabKey].push(tag);
+
+  const ids = [...selectedItems];
+  if (!confirm(`${modo==='add'?'Adicionar':'Remover'} "${tag}" (${nomes[vocabKey]}) em ${ids.length} peça(s)?`)) return;
+  ids.forEach(id => {
+    if (!itemTags[id]) itemTags[id] = {};
+    if (!itemTags[id][vocabKey]) itemTags[id][vocabKey] = [];
+    const arr = itemTags[id][vocabKey];
+    if (modo === 'add') { if (!arr.includes(tag)) arr.push(tag); }
+    else itemTags[id][vocabKey] = arr.filter(t => t !== tag);
+  });
+  saveAll();
+  buildFilterUI();
+  filterItems();
+  flushCloudSync();
+  showToast(`${ids.length} peça(s) atualizada(s)`);
+}
+
+async function batchDeletar() {
+  if (!batchExigeSelecao()) return;
+  const ids = [...selectedItems];
+  if (!confirm(`⚠ DELETAR ${ids.length} peça(s) permanentemente?\n\nIsso remove as peças, suas fotos e tags. Não pode ser desfeito.`)) return;
+  if (!confirm(`Tem certeza mesmo? Vai apagar ${ids.length} peça(s).`)) return;
+  showToast('Deletando...');
+  for (const id of ids) {
+    // apaga fotos do R2
+    await delFoto('item-' + id + '-0');
+    await delFoto('item-' + id + '-1');
+    delete photos[id];
+    delete itemTags[id];
+  }
+  wardrobe = wardrobe.filter(i => !selectedItems.has(i.id));
+  selectedItems.clear();
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+  save('gr_selected', []);
+  saveAll();
+  updateBatchCount();
+  buildFilterUI();
+  filterItems();
+  renderSelectedPanel();
+  await flushCloudSync();
+  showToast(`${ids.length} peça(s) deletada(s)`);
 }
 
 // ===================== EDIT MODAL =====================
