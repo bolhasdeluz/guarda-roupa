@@ -268,6 +268,10 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .item-card.fora-uso .fora-check{background:rgba(192,96,96,.25);border-color:var(--red)}
 .item-card.fora-uso .fora-check span{color:#e0a0a0}
 
+.look-ruim{border-color:#5a3030;background:#1e1414}
+.look-badge-ruim{font-size:9px;background:rgba(192,96,96,.25);color:#e09090;padding:2px 7px;border-radius:8px;margin-left:6px;font-weight:500;letter-spacing:0}
+.look-motivo{margin-top:10px;font-size:12px;color:#e0a0a0;background:rgba(192,96,96,.12);border-radius:8px;padding:8px 10px;line-height:1.5}
+
 /* RESPONSIVE */
 @media(max-width:860px){
   .stylist-layout{grid-template-columns:1fr}.chat-area{min-height:350px}
@@ -451,6 +455,16 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
         <div class="field-label">Notas (opcional)</div>
         <input class="field-input" id="lookNotas" placeholder="Como ficou, o que achou...">
       </div>
+    </div>
+
+    <div class="section-divider">Avaliação</div>
+    <label style="font-size:13px;color:var(--text);display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="lookNaoGostei" onchange="toggleNaoGosteiField()" style="accent-color:var(--red);width:16px;height:16px">
+      👎 Não gostei desse look
+    </label>
+    <div id="lookNaoGosteiWrap" style="display:none;margin-top:10px">
+      <div class="field-label">Por que não funcionou?</div>
+      <input class="field-input" id="lookMotivo" placeholder="Ex: ficou pesado, cores brigaram, desconfortável...">
     </div>
 
     <div class="modal-actions">
@@ -1959,11 +1973,18 @@ async function askStylist() {
   // Histórico de looks já montados (pra IA não repetir e citar quando parecido)
   const looksCtx = looks.length
     ? '\n\nLooks já registrados no histórico:\n' + looks.map(l =>
-        `Look #${l.id}${l.nome?' ('+l.nome+')':''}${l.ocasiao?' ['+l.ocasiao+']':''}: peças ${(l.ids||[]).map(id=>'#'+id).join(', ')}`
+        `Look #${l.id}${l.nome?' ('+l.nome+')':''}${l.ocasiao?' ['+l.ocasiao+']':''}: peças ${(l.ids||[]).map(id=>'#'+id).join(', ')}${l.naoGostei?' — NÃO GOSTOU'+(l.motivo?' ('+l.motivo+')':''):''}`
+      ).join('\n')
+    : '';
+  // looks que a Anna NÃO gostou — pra evitar repetir os mesmos erros
+  const ruins = looks.filter(l => l.naoGostei);
+  const ruinsCtx = ruins.length
+    ? '\n\nIMPORTANTE — looks que a Anna NÃO gostou (evite combinações parecidas e os motivos):\n' + ruins.map(l =>
+        `Look #${l.id}: peças ${(l.ids||[]).map(id=>'#'+id).join(', ')}${l.motivo?' — motivo: '+l.motivo:''}`
       ).join('\n')
     : '';
 
-  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}${looksCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima. Proponha combinações NOVAS, diferentes das já registradas no histórico. Se a sua sugestão ficar parecida com um look já registrado, avise mencionando o número (ex: "parecido com o seu Look #2"). Ao sugerir um look, comece a sugestão com uma linha no formato "Look: <nome curto do look> | <ocasião>" para facilitar salvar.`;
+  const system = `Você é uma stylist pessoal da Anna (Porto Alegre). Estilo eclético, colorido e criativo. Combinações do cotidiano e para rituais de Umbanda/Quimbanda.\n\nGuarda-roupa:\n${wardrobeCtx}${selCtx}${occCtx}${looksCtx}${ruinsCtx}\n\nRegras: responda em PT-BR direto e prático, SEMPRE referencie cada peça pelo #ID e nome (ex: "a #63 Vestido poá"), não invente peças, e não sugira peças que não estão na lista acima. Proponha combinações NOVAS, diferentes das já registradas no histórico. Se a sua sugestão ficar parecida com um look já registrado, avise mencionando o número (ex: "parecido com o seu Look #2"). Ao sugerir um look, comece a sugestão com uma linha no formato "Look: <nome curto do look> | <ocasião>" para facilitar salvar. Evite repetir combinações que a Anna marcou que NÃO gostou, e leve em conta os motivos dela ao sugerir.`;
 
   addMessage('user', `${occCtx ? 'Ocasião: '+occasions.join(', ')+'\n' : ''}${userQ}`);
   document.getElementById('userPrompt').value = '';
@@ -2504,10 +2525,10 @@ function renderLooks() {
         <span class="lp-id">#${p.id}</span>
       </div>`;
     }).join('');
-    return `<div class="look-card">
+    return `<div class="look-card${look.naoGostei?' look-ruim':''}">
       <div class="look-head">
         <div>
-          <div class="look-num">Look #${look.id}</div>
+          <div class="look-num">Look #${look.id}${look.naoGostei?' <span class="look-badge-ruim">👎 não curti</span>':''}</div>
           <div class="look-name">${look.nome || 'Sem nome'}</div>
           ${look.ocasiao ? `<div class="look-occ">${look.ocasiao}</div>` : ''}
         </div>
@@ -2515,6 +2536,7 @@ function renderLooks() {
         <button class="btn-upload" onclick="openLookModal(${look.id})" style="align-self:flex-start">✎ Editar</button>
       </div>
       <div class="look-pieces">${pieceThumbs || '<span style="color:var(--muted);font-size:12px">Sem peças</span>'}</div>
+      ${look.naoGostei && look.motivo ? `<div class="look-motivo">👎 ${look.motivo}</div>` : ''}
       ${look.notas ? `<div class="look-notas">"${look.notas}"</div>` : ''}
     </div>`;
   }).join('');
@@ -2538,6 +2560,8 @@ function openLookModal(lookId) {
     document.getElementById('lookNome').value = look.nome || '';
     document.getElementById('lookOcasiao').value = look.ocasiao || '';
     document.getElementById('lookNotas').value = look.notas || '';
+    document.getElementById('lookNaoGostei').checked = !!look.naoGostei;
+    document.getElementById('lookMotivo').value = look.motivo || '';
     lookDraftPieces = [...(look.ids||[])];
     lookDraftPhoto = look.foto || null;
     document.getElementById('lookDeleteBtn').style.display = 'block';
@@ -2546,13 +2570,20 @@ function openLookModal(lookId) {
     document.getElementById('lookNome').value = '';
     document.getElementById('lookOcasiao').value = '';
     document.getElementById('lookNotas').value = '';
+    document.getElementById('lookNaoGostei').checked = false;
+    document.getElementById('lookMotivo').value = '';
     lookDraftPieces = [];
     lookDraftPhoto = null;
     document.getElementById('lookDeleteBtn').style.display = 'none';
   }
   renderLookSelected();
   renderLookPhotoThumb();
+  toggleNaoGosteiField();
   document.getElementById('lookModal').style.display = 'flex';
+}
+function toggleNaoGosteiField() {
+  const on = document.getElementById('lookNaoGostei').checked;
+  document.getElementById('lookNaoGosteiWrap').style.display = on ? 'block' : 'none';
 }
 function closeLookModal() { document.getElementById('lookModal').style.display = 'none'; }
 
@@ -2616,14 +2647,16 @@ function saveLook() {
   const nome = document.getElementById('lookNome').value.trim();
   const ocasiao = document.getElementById('lookOcasiao').value.trim();
   const notas = document.getElementById('lookNotas').value.trim();
+  const naoGostei = document.getElementById('lookNaoGostei').checked;
+  const motivo = naoGostei ? document.getElementById('lookMotivo').value.trim() : '';
   let savedId;
   if (editingLookId !== null) {
     const look = looks.find(l => l.id === editingLookId);
-    Object.assign(look, { nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto });
+    Object.assign(look, { nome, ocasiao, notas, naoGostei, motivo, ids: [...lookDraftPieces], foto: lookDraftPhoto });
     savedId = look.id;
   } else {
     const newId = Math.max(0, ...looks.map(l => l.id||0)) + 1;
-    looks.push({ id: newId, nome, ocasiao, notas, ids: [...lookDraftPieces], foto: lookDraftPhoto, criadoEm: new Date().toISOString() });
+    looks.push({ id: newId, nome, ocasiao, notas, naoGostei, motivo, ids: [...lookDraftPieces], foto: lookDraftPhoto, criadoEm: new Date().toISOString() });
     savedId = newId;
   }
   saveAll();
