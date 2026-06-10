@@ -687,7 +687,15 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 <div class="modal-overlay" id="imgSearchModal" style="display:none">
   <div class="modal-box">
     <h3>📷 Buscar peça por imagem</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Tire ou escolha uma foto da peça. O app compara com o catálogo e mostra as mais parecidas.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Tire ou escolha uma foto — pode ser parcial (um pedaço, uma cor, a estampa).</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <label style="flex:1;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+        <input type="radio" name="imgSearchModo" value="ia" checked style="accent-color:var(--accent)"> 🤖 Inteligente (IA)
+      </label>
+      <label style="flex:1;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text);cursor:pointer;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+        <input type="radio" name="imgSearchModo" value="offline" style="accent-color:var(--accent)"> ⚡ Rápida (offline)
+      </label>
+    </div>
     <label class="btn-upload" style="display:block;text-align:center;cursor:pointer">
       📸 Escolher / tirar foto
       <input type="file" accept="image/*" style="display:none" onchange="rodarBuscaImagem(this)">
@@ -3164,8 +3172,12 @@ async function rodarBuscaImagem(input) {
   const status = document.getElementById('imgSearchStatus');
   const box = document.getElementById('imgSearchResults');
   box.innerHTML = '';
+  const modo = (document.querySelector('input[name="imgSearchModo"]:checked')||{}).value || 'ia';
   status.textContent = 'Lendo a foto...';
   const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+  input.value = '';
+  if (modo === 'ia') return buscaImagemIA(dataUrl, status, box);
+  // ---- modo offline (hash) ----
   const alvo = await hashImagem(dataUrl);
   if (!alvo) { status.textContent = 'Não consegui ler essa imagem.'; return; }
   status.textContent = 'Comparando com o catálogo...';
@@ -3177,16 +3189,65 @@ async function rodarBuscaImagem(input) {
     const item = wardrobe.find(i => i.id === r.id);
     const sim = Math.max(0, Math.round((1 - r.dist / 64) * 100));
     const p = photos[r.id]; const u = Array.isArray(p) ? p[0] : p;
-    return `<div onclick="document.getElementById('imgSearchModal').style.display='none';openEditModal(${r.id})" style="display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer">
-      <div style="width:54px;height:54px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#0e0e0e">${u?`<img src="${u}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;color:var(--text)">#${r.id} · ${item?item.tipo:''}</div>
-        <div style="font-size:11px;color:var(--muted)">${item?item.cor:''}</div>
-      </div>
-      <div style="font-size:13px;font-weight:600;color:${sim>=80?'var(--accent)':sim>=60?'#d0b880':'var(--muted)'}">${sim}%</div>
-    </div>`;
+    return cardResultadoBusca(r.id, item, u, sim + '%', '');
   }).join('');
-  input.value = '';
+}
+
+// Monta a descrição de texto de uma peça pro catálogo enviado à IA
+function descricaoPeca(item) {
+  const t = itemTags[item.id] || {};
+  const extra = [
+    ...(t.cores||[]), ...(t.estampas||[]), ...(t.estacoes||[]), ...(t.ocasioes||[])
+  ].join(', ');
+  return [item.tipo, item.cor, item.estampa, item.obs, extra].filter(Boolean).join(' · ');
+}
+
+async function buscaImagemIA(dataUrl, status, box) {
+  status.textContent = '🤖 A IA está analisando a foto e o catálogo...';
+  const catalogo = wardrobe.map(i => ({ id: i.id, desc: descricaoPeca(i) }));
+  try {
+    const res = await fetch(CLOUDFLARE_API + '/buscar-imagem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': API_TOKEN },
+      body: JSON.stringify({ image: dataUrl, catalogo })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    // extrai o texto da resposta do modelo
+    let txt = '';
+    if (Array.isArray(data.content)) txt = data.content.filter(b => b.type==='text').map(b => b.text).join('');
+    else if (typeof data === 'string') txt = data;
+    txt = (txt||'').replace(/```json|```/g, '').trim();
+    let parsed = {};
+    try { parsed = JSON.parse(txt); } catch(e) { parsed = { matches: [] }; }
+    const matches = parsed.matches || [];
+    if (!matches.length) { status.textContent = 'A IA não achou nada parecido. Tente outra foto ou o modo rápido.'; return; }
+    status.textContent = 'Mais prováveis (toque pra editar):';
+    box.innerHTML = matches.slice(0,8).map(m => {
+      const item = wardrobe.find(i => i.id === m.id);
+      if (!item) return '';
+      const p = photos[m.id]; const u = Array.isArray(p) ? p[0] : p;
+      return cardResultadoBusca(m.id, item, u, (m.conf||0) + '%', m.motivo || '');
+    }).join('');
+    // dispara carregamento das fotos dos resultados (lazy não cobre o modal)
+    matches.slice(0,8).forEach(m => { if (!photos[m.id]) carregarFotoItem(m.id).then(() => {
+      const im = document.querySelector('#imgRes-'+m.id+' img'); const ph = photos[m.id];
+      if (im && ph) im.src = Array.isArray(ph)?ph[0]:ph;
+    }); });
+  } catch(e) {
+    status.textContent = 'Erro na busca por IA: ' + e.message;
+  }
+}
+
+function cardResultadoBusca(id, item, url, badge, motivo) {
+  return `<div id="imgRes-${id}" onclick="document.getElementById('imgSearchModal').style.display='none';openEditModal(${id})" style="display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer">
+    <div style="width:54px;height:54px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#0e0e0e">${url?`<img src="${url}" style="width:100%;height:100%;object-fit:cover">`:'<span style="display:flex;align-items:center;justify-content:center;height:100%;font-size:10px;color:var(--muted)">📷</span>'}</div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;color:var(--text)">#${id} · ${item?item.tipo:''}</div>
+      <div style="font-size:11px;color:var(--muted)">${item?item.cor:''}${motivo?' — '+motivo:''}</div>
+    </div>
+    <div style="font-size:13px;font-weight:600;color:var(--accent)">${badge}</div>
+  </div>`;
 }
 
 // ─────────── DUPLICATAS / PARECIDAS ───────────
