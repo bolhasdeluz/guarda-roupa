@@ -76,6 +76,9 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
 .tag.ocas{color:#b0b0d0;border-color:#252535;background:#141420}
 .tag.origem{color:#d0b880;border-color:#352a10;background:#1e1a08}
 .tag.onde{color:#90c0d0;border-color:#1a3540;background:#0e1a20}
+.foto-loading{display:flex;align-items:center;justify-content:center}
+.spinner{width:22px;height:22px;border:2px solid rgba(201,169,110,.25);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* EDIT MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:flex;align-items:center;justify-content:center;z-index:300;padding:16px}
@@ -1295,6 +1298,54 @@ function agendarSyncFotos() {
   photoSyncTimer = setTimeout(syncFotosSujas, 800);
 }
 
+// ═══════════════ CACHE LOCAL DE FOTOS (IndexedDB) ═══════════════
+// Guarda as dataURLs das fotos no aparelho pra abrir instantâneo na próxima vez.
+let _idbPromise = null;
+function idbOpen() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open('guardaRoupaFotos', 1);
+    req.onupgradeneeded = () => { req.result.createObjectStore('fotos'); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return _idbPromise;
+}
+async function idbGet(key) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readonly').objectStore('fotos').get(key);
+      tx.onsuccess = () => resolve(tx.result || null);
+      tx.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+async function idbSet(key, val) {
+  try {
+    const db = await idbOpen();
+    return await new Promise((resolve) => {
+      const tx = db.transaction('fotos', 'readwrite').objectStore('fotos').put(val, key);
+      tx.onsuccess = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e) { return false; }
+}
+async function idbDel(key) {
+  try {
+    const db = await idbOpen();
+    const tx = db.transaction('fotos', 'readwrite').objectStore('fotos');
+    tx.delete(key);
+  } catch(e) {}
+}
+async function idbClear() {
+  try {
+    const db = await idbOpen();
+    const tx = db.transaction('fotos', 'readwrite').objectStore('fotos');
+    tx.clear();
+  } catch(e) {}
+}
+
 async function putFoto(key, dataUrl) {
   const res = await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
     method: 'PUT',
@@ -1302,21 +1353,31 @@ async function putFoto(key, dataUrl) {
     body: dataUrl || ''
   });
   if (!res.ok) throw new Error('PUT foto ' + key + ' HTTP ' + res.status);
+  if (dataUrl) idbSet(key, dataUrl);   // cacheia localmente
 }
 async function delFoto(key) {
+  idbDel(key);                  // limpa cache local
+  fotosExistentes.delete(key);  // tira do manifesto: o lazy loader não tenta baixar de novo
   try {
     await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
       method: 'DELETE', headers: { 'Authorization': API_TOKEN }
     });
   } catch(e) {}
 }
-async function getFoto(key) {
-  const res = await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
-    headers: { 'Authorization': API_TOKEN }
-  });
-  if (!res.ok) return null;
-  const txt = await res.text();
-  return txt && txt.startsWith('data:') ? txt : null;
+async function getFoto(key, usarCache = true) {
+  if (usarCache) {
+    const cached = await idbGet(key);
+    if (cached) return cached;
+  }
+  try {
+    const res = await fetch(CLOUDFLARE_API + '/foto/' + encodeURIComponent(key), {
+      headers: { 'Authorization': API_TOKEN }
+    });
+    if (!res.ok) return null;
+    const txt = await res.text();
+    if (txt && txt.startsWith('data:')) { idbSet(key, txt); return txt; }
+  } catch(e) {}
+  return null;
 }
 
 // Sobe todas as fotos sujas, uma a uma (cada arquivo é pequeno)
@@ -1348,70 +1409,122 @@ function lookPhotosManifest() {
   return looks.filter(l => l.foto).map(l => 'look-' + l.id);
 }
 
-// Carrega fotos individuais do R2 depois que os dados chegaram
+// Conjunto de chaves de foto que existem no R2 (pra saber quais peças TÊM foto sem baixar)
+let fotosExistentes = new Set();
+let fotosManifestCarregado = false;
+
+// Em vez de baixar tudo, descobre o que existe e preenche do cache local na hora.
+// As fotos não-cacheadas são baixadas sob demanda (lazy) quando o card aparece.
 async function carregarFotosDaNuvem(lookPhotoKeys) {
-  fotosCarregando = true;   // trava o sync enquanto carrega (não sobrescreve a nuvem)
-  // Descobre quais fotos existem no R2
+  fotosCarregando = true;
   let keys = [];
   try {
     const res = await fetch(CLOUDFLARE_API + '/fotos-lista', { headers: { 'Authorization': API_TOKEN } });
     if (res.ok) { const d = await res.json(); keys = d.keys || []; }
   } catch(e) { console.warn('lista de fotos falhou', e); }
 
-  // junta chaves de peças + de looks
   const itemKeys = keys.filter(k => /^item-\d+-\d$/.test(k));
   const lookKeys = [...new Set([...(lookPhotoKeys||[]), ...keys.filter(k => /^look-/.test(k))])];
-  const todas = [...itemKeys, ...lookKeys];
-  const total = todas.length;
-  if (!total) { fotosCarregando = false; return; }
+  fotosExistentes = new Set([...itemKeys, ...lookKeys]);
+  fotosManifestCarregado = true;
 
-  let baixadas = 0, falhas = 0, mudou = false;
-  updateSyncStatus('loading');
-
-  // Baixa em paralelo, em lotes de 6 (rápido e sem travar)
-  const LOTE = 6;
-  for (let i = 0; i < todas.length; i += LOTE) {
-    const fatia = todas.slice(i, i + LOTE);
-    const resultados = await Promise.all(fatia.map(async key => {
-      try { return { key, url: await getFoto(key) }; }
-      catch(e) { return { key, url: null, erro: true }; }
-    }));
-    resultados.forEach(({ key, url, erro }) => {
-      if (erro) { falhas++; return; }
-      if (!url) return;  // vazio: NÃO sobrescreve nada
-      const mItem = key.match(/^item-(\d+)-(\d)$/);
-      if (mItem) {
-        const id = Number(mItem[1]), slot = Number(mItem[2]);
-        const cur = photos[id];
-        if (slot === 0) {
-          if (Array.isArray(cur)) photos[id] = [url, cur[1]];
-          else photos[id] = url;
-        } else {
-          const p0 = Array.isArray(cur) ? cur[0] : (cur || null);
-          photos[id] = [p0, url];
-        }
-        mudou = true;
-      } else {
-        const lookId = key.slice('look-'.length);
-        const look = looks.find(l => String(l.id) === lookId);
-        if (look) { look.foto = url; mudou = true; }
-      }
-      baixadas++;
-    });
-    // atualiza a tela progressivamente conforme baixa
-    if (mudou) {
-      renderGrid();
-      if (document.getElementById('upload').classList.contains('active')) renderUpload();
-      if (document.getElementById('looks').classList.contains('active')) renderLooks();
-    }
+  // Preenche do CACHE LOCAL imediatamente (instantâneo, sem rede)
+  let mudou = false;
+  for (const key of itemKeys) {
+    const cached = await idbGet(key);
+    if (!cached) continue;
+    const m = key.match(/^item-(\d+)-(\d)$/);
+    const id = Number(m[1]), slot = Number(m[2]);
+    const cur = photos[id];
+    if (slot === 0) photos[id] = Array.isArray(cur) ? [cached, cur[1]] : cached;
+    else photos[id] = [Array.isArray(cur) ? cur[0] : (cur||null), cached];
+    mudou = true;
   }
-
-  if (mudou) {
-    try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+  for (const key of lookKeys) {
+    const cached = await idbGet(key);
+    if (!cached) continue;
+    const lookId = key.slice('look-'.length);
+    const look = looks.find(l => String(l.id) === lookId);
+    if (look) { look.foto = cached; mudou = true; }
   }
   fotosCarregando = false;
-  if (falhas) showToast(`${baixadas} fotos carregadas, ${falhas} falharam (tente recarregar)`);
-  updateSyncStatus('ok');
+  if (mudou) {
+    renderGrid();
+    if (document.getElementById('upload').classList.contains('active')) renderUpload();
+    if (document.getElementById('looks').classList.contains('active')) renderLooks();
+  } else {
+    renderGrid(); // re-render pra placeholders saberem que há foto a carregar
+  }
+}
+
+// Diz se uma peça TEM foto (mesmo que ainda não baixada), olhando cache em memória + manifesto do R2
+function temFoto(id) {
+  if (photos[id]) return true;
+  if (!fotosManifestCarregado) return false;
+  return fotosExistentes.has('item-' + id + '-0') || fotosExistentes.has('item-' + id + '-1');
+}
+
+// Baixa a foto de uma peça sob demanda (lazy) e atualiza o card
+const _baixando = new Set();
+async function carregarFotoItem(id) {
+  if (photos[id] || _baixando.has(id)) return;
+  const k0 = 'item-' + id + '-0', k1 = 'item-' + id + '-1';
+  if (!fotosExistentes.has(k0) && !fotosExistentes.has(k1)) return;
+  _baixando.add(id);
+  try {
+    const u0 = fotosExistentes.has(k0) ? await getFoto(k0) : null;
+    const u1 = fotosExistentes.has(k1) ? await getFoto(k1) : null;
+    // re-checa: se a foto foi DELETADA enquanto baixava, descarta (não ressuscita)
+    if (!fotosExistentes.has(k0) && !fotosExistentes.has(k1)) { _baixando.delete(id); return; }
+    if (u0 && u1) photos[id] = [u0, u1];
+    else if (u0) photos[id] = u0;
+    else if (u1) photos[id] = [null, u1];
+    // atualiza só o card dessa peça, sem re-renderizar tudo
+    atualizarFotoNoCard(id);
+  } catch(e) {}
+  _baixando.delete(id);
+}
+
+// Atualiza a miniatura de um card específico depois que a foto baixou
+function atualizarFotoNoCard(id) {
+  const card = document.querySelector('#itemGrid .item-card[data-id="' + id + '"]');
+  if (!card) return;
+  const photo = photos[id];
+  if (!photo) return;
+  const url = Array.isArray(photo) ? photo[0] : photo;
+  if (!url) return;
+  let thumb = card.querySelector('.item-thumb');
+  const noPhoto = card.querySelector('.no-photo');
+  if (noPhoto) {
+    // troca o placeholder por imagem
+    const div = document.createElement('div');
+    div.className = 'item-thumb';
+    div.style.position = 'relative';
+    div.innerHTML = '<img src="' + url + '" alt="">' + (Array.isArray(photo)&&photo[1]?'<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);border-radius:8px;font-size:9px;padding:1px 5px;color:var(--accent2)">+1</span>':'');
+    noPhoto.replaceWith(div);
+  } else if (thumb) {
+    const img = thumb.querySelector('img');
+    if (img && img.dataset.lazy) { img.src = url; delete img.dataset.lazy; }
+  }
+}
+
+// Observer que dispara o carregamento quando o card entra na tela
+let _fotoObserver = null;
+function observarFotosLazy() {
+  if (_fotoObserver) _fotoObserver.disconnect();
+  _fotoObserver = new IntersectionObserver((entries) => {
+    entries.forEach(en => {
+      if (en.isIntersecting) {
+        const id = Number(en.target.dataset.id);
+        carregarFotoItem(id);
+        _fotoObserver.unobserve(en.target);
+      }
+    });
+  }, { rootMargin: '300px' });  // começa a baixar um pouco antes de aparecer
+  document.querySelectorAll('#itemGrid .item-card').forEach(card => {
+    const id = Number(card.dataset.id);
+    if (!photos[id] && temFoto(id)) _fotoObserver.observe(card);
+  });
 }
 
 // MIGRAÇÃO única: pega fotos que estavam embutidas no JSON antigo e sobe como arquivos
@@ -1536,7 +1649,9 @@ function renderGrid(filtered) {
       </label>
       ${photo
         ? `<div class="item-thumb" style="position:relative"><img src="${Array.isArray(photo)?photo[0]:photo}" alt="" loading="lazy">${Array.isArray(photo)&&photo[1]?'<span style="position:absolute;bottom:4px;right:4px;background:rgba(0,0,0,.6);border-radius:8px;font-size:9px;padding:1px 5px;color:var(--accent2)">+1</span>':''}</div>`
-        : `<div class="no-photo"><span class="no-photo-icon">📷</span><span>sem foto</span></div>`}
+        : (temFoto(item.id)
+          ? `<div class="no-photo foto-loading"><span class="spinner"></span></div>`
+          : `<div class="no-photo"><span class="no-photo-icon">📷</span><span>sem foto</span></div>`)}
       <div class="item-info">
         <div class="item-id">#${item.id}</div>
         <div class="item-name">${item.tipo}</div>
@@ -1556,6 +1671,8 @@ function renderGrid(filtered) {
       toggleSelect(id, this);
     });
   });
+  // Carregamento sob demanda das fotos que ainda não estão em memória
+  observarFotosLazy();
 }
 
 // Texto pesquisável completo de uma peça: tipo, cor, estampa, obs, categoria, id e TODAS as tags
@@ -2974,6 +3091,7 @@ async function limparCacheLocal() {
   // zera as fotos em memória e no cache local
   photos = {};
   try { localStorage.removeItem('gr_photos'); } catch(e) {}
+  await idbClear();   // limpa o cache de fotos do aparelho
   looks.forEach(l => { if (l.foto) l.foto = null; });
   renderGrid();
   if (document.getElementById('upload').classList.contains('active')) renderUpload();
@@ -2984,9 +3102,31 @@ async function limparCacheLocal() {
 }
 
 async function recarregarFotos() {
-  showToast('Recarregando todas as fotos da nuvem...');
-  await carregarFotosDaNuvem(lookPhotosManifest());
-  showToast('✓ Fotos recarregadas!');
+  showToast('Recarregando fotos da nuvem...');
+  // Baixa TODAS de novo da rede (ignora cache) e atualiza o cache local
+  if (!fotosManifestCarregado) await carregarFotosDaNuvem(lookPhotosManifest());
+  const chaves = [...fotosExistentes];
+  let ok = 0;
+  const LOTE = 12;
+  for (let i = 0; i < chaves.length; i += LOTE) {
+    const fatia = chaves.slice(i, i + LOTE);
+    await Promise.all(fatia.map(async key => {
+      const url = await getFoto(key, false);  // false = ignora cache, baixa da rede
+      if (!url) return;
+      const m = key.match(/^item-(\d+)-(\d)$/);
+      if (m) {
+        const id = Number(m[1]), slot = Number(m[2]); const cur = photos[id];
+        if (slot === 0) photos[id] = Array.isArray(cur) ? [url, cur[1]] : url;
+        else photos[id] = [Array.isArray(cur) ? cur[0] : (cur||null), url];
+      } else {
+        const look = looks.find(l => String(l.id) === key.slice('look-'.length));
+        if (look) look.foto = url;
+      }
+      ok++;
+    }));
+    renderGrid();
+  }
+  showToast(`✓ ${ok} fotos recarregadas!`);
   if (document.getElementById('storageModal').style.display === 'flex') verificarArmazenamento();
 }
 
