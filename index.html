@@ -374,6 +374,8 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
       <button class="btn-tool" onclick="openNewItemModal()">＋ Nova peça</button>
       <button class="btn-tool primary" onclick="openBulkModal()">🗂 Distribuir fotos em lote</button>
       <button class="btn-tool" onclick="verificarArmazenamento()">🔍 Verificar armazenamento</button>
+      <button class="btn-tool" onclick="abrirBuscaImagem()">📷 Buscar por imagem</button>
+      <button class="btn-tool" onclick="abrirDuplicatas()">👯 Achar duplicatas</button>
     </div>
     <div class="upload-search-row">
       <input class="search-input" id="uploadSearch" placeholder="Filtrar peças..." oninput="filterUpload()" style="max-width:300px">
@@ -677,6 +679,42 @@ main{max-width:1400px;margin:0 auto;padding:0 24px 48px}
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="document.getElementById('batchTagModal').style.display='none'">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUSCA POR IMAGEM -->
+<div class="modal-overlay" id="imgSearchModal" style="display:none">
+  <div class="modal-box">
+    <h3>📷 Buscar peça por imagem</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Tire ou escolha uma foto da peça. O app compara com o catálogo e mostra as mais parecidas.</p>
+    <label class="btn-upload" style="display:block;text-align:center;cursor:pointer">
+      📸 Escolher / tirar foto
+      <input type="file" accept="image/*" style="display:none" onchange="rodarBuscaImagem(this)">
+    </label>
+    <div id="imgSearchStatus" style="font-size:12px;color:var(--muted);margin-top:12px;text-align:center"></div>
+    <div id="imgSearchResults" style="margin-top:12px;display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('imgSearchModal').style.display='none'">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- DUPLICATAS -->
+<div class="modal-overlay" id="dupModal" style="display:none">
+  <div class="modal-box">
+    <h3>👯 Peças parecidas</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Compara as fotos e agrupa as parecidas pra você revisar. Ajuste a sensibilidade se vier de menos ou de mais.</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="font-size:12px;color:var(--muted)">Sensibilidade</span>
+      <input type="range" id="dupSens" min="4" max="18" value="10" style="flex:1;accent-color:var(--accent)">
+      <span id="dupSensVal" style="font-size:12px;color:var(--accent);min-width:60px">média</span>
+    </div>
+    <button class="btn-confirm" onclick="rodarDuplicatas()" style="width:100%;background:var(--accent);border:none;color:var(--bg)">🔍 Procurar parecidas</button>
+    <div id="dupStatus" style="font-size:12px;color:var(--muted);margin-top:12px;text-align:center"></div>
+    <div id="dupResults" style="margin-top:12px;display:flex;flex-direction:column;gap:14px;max-height:50vh;overflow-y:auto"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="document.getElementById('dupModal').style.display='none'">Fechar</button>
     </div>
   </div>
 </div>
@@ -1354,6 +1392,7 @@ async function putFoto(key, dataUrl) {
   });
   if (!res.ok) throw new Error('PUT foto ' + key + ' HTTP ' + res.status);
   if (dataUrl) idbSet(key, dataUrl);   // cacheia localmente
+  const mi = key.match(/^item-(\d+)-0$/); if (mi) idbDel('hash:item-' + mi[1]);  // hash velho invalida
 }
 async function delFoto(key) {
   idbDel(key);                  // limpa cache local
@@ -3049,6 +3088,175 @@ function salvarLookDaResposta(idsCsv, nomeSugerido, ocasiaoSugerida) {
   renderLookSelected();
   showToast('Revise e salve o look');
 }
+
+// ═══════════════ COMPARAÇÃO DE IMAGENS (hash perceptual, offline) ═══════════════
+// Calcula um "dHash" de 64 bits: reduz a foto a 9x8 tons de cinza e compara pixels vizinhos.
+function hashImagem(dataUrl) {
+  return new Promise(resolve => {
+    if (!dataUrl) return resolve(null);
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const W = 9, H = 8;
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, W, H);
+        const d = ctx.getImageData(0, 0, W, H).data;
+        const gray = [];
+        for (let i = 0; i < W * H; i++) {
+          gray.push(0.299*d[i*4] + 0.587*d[i*4+1] + 0.114*d[i*4+2]);
+        }
+        let bits = '';
+        for (let y = 0; y < H; y++)
+          for (let x = 0; x < W - 1; x++) {
+            const idx = y*W + x;
+            bits += gray[idx] < gray[idx+1] ? '1' : '0';
+          }
+        resolve(bits);
+      } catch(e) { resolve(null); }
+    };
+    img.onerror = () => resolve(null);
+    img.src = dataUrl;
+  });
+}
+function distHamming(a, b) {
+  if (!a || !b || a.length !== b.length) return 999;
+  let d = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) d++;
+  return d;
+}
+// Pega o hash de uma foto de peça (slot 0), usando cache em IndexedDB
+async function hashDaPeca(id) {
+  const cacheKey = 'hash:item-' + id;
+  const cached = await idbGet(cacheKey);
+  if (cached) return cached;
+  // precisa da foto: usa a que está em memória ou baixa (com cache)
+  let url = photos[id];
+  url = Array.isArray(url) ? url[0] : url;
+  if (!url && fotosExistentes.has('item-'+id+'-0')) url = await getFoto('item-'+id+'-0');
+  if (!url) return null;
+  const h = await hashImagem(url);
+  if (h) idbSet(cacheKey, h);
+  return h;
+}
+// Calcula hashes de todas as peças com foto, mostrando progresso
+async function calcularTodosHashes(onProgress) {
+  const comFoto = wardrobe.filter(i => temFoto(i.id));
+  const res = [];
+  for (let i = 0; i < comFoto.length; i++) {
+    const id = comFoto[i].id;
+    const h = await hashDaPeca(id);
+    if (h) res.push({ id, hash: h });
+    if (onProgress) onProgress(i + 1, comFoto.length);
+  }
+  return res;
+}
+
+// ─────────── BUSCA POR IMAGEM ───────────
+function abrirBuscaImagem() {
+  document.getElementById('imgSearchResults').innerHTML = '';
+  document.getElementById('imgSearchStatus').textContent = '';
+  document.getElementById('imgSearchModal').style.display = 'flex';
+}
+async function rodarBuscaImagem(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const status = document.getElementById('imgSearchStatus');
+  const box = document.getElementById('imgSearchResults');
+  box.innerHTML = '';
+  status.textContent = 'Lendo a foto...';
+  const dataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(file); });
+  const alvo = await hashImagem(dataUrl);
+  if (!alvo) { status.textContent = 'Não consegui ler essa imagem.'; return; }
+  status.textContent = 'Comparando com o catálogo...';
+  const todos = await calcularTodosHashes((f, t) => { status.textContent = `Comparando... ${f}/${t}`; });
+  const ranked = todos.map(o => ({ id: o.id, dist: distHamming(alvo, o.hash) }))
+    .sort((a, b) => a.dist - b.dist).slice(0, 8);
+  status.textContent = ranked.length ? 'Mais parecidas (toque pra editar):' : 'Nenhuma peça com foto pra comparar.';
+  box.innerHTML = ranked.map(r => {
+    const item = wardrobe.find(i => i.id === r.id);
+    const sim = Math.max(0, Math.round((1 - r.dist / 64) * 100));
+    const p = photos[r.id]; const u = Array.isArray(p) ? p[0] : p;
+    return `<div onclick="document.getElementById('imgSearchModal').style.display='none';openEditModal(${r.id})" style="display:flex;gap:10px;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;cursor:pointer">
+      <div style="width:54px;height:54px;border-radius:6px;overflow:hidden;flex-shrink:0;background:#0e0e0e">${u?`<img src="${u}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:var(--text)">#${r.id} · ${item?item.tipo:''}</div>
+        <div style="font-size:11px;color:var(--muted)">${item?item.cor:''}</div>
+      </div>
+      <div style="font-size:13px;font-weight:600;color:${sim>=80?'var(--accent)':sim>=60?'#d0b880':'var(--muted)'}">${sim}%</div>
+    </div>`;
+  }).join('');
+  input.value = '';
+}
+
+// ─────────── DUPLICATAS / PARECIDAS ───────────
+document.addEventListener('input', e => {
+  if (e.target && e.target.id === 'dupSens') {
+    const v = Number(e.target.value);
+    const lbl = v <= 6 ? 'só idênticas' : v <= 11 ? 'média' : 'mais frouxa';
+    const el = document.getElementById('dupSensVal'); if (el) el.textContent = lbl;
+  }
+});
+function abrirDuplicatas() {
+  document.getElementById('dupResults').innerHTML = '';
+  document.getElementById('dupStatus').textContent = '';
+  document.getElementById('dupModal').style.display = 'flex';
+}
+async function rodarDuplicatas() {
+  const status = document.getElementById('dupStatus');
+  const box = document.getElementById('dupResults');
+  const limiar = Number(document.getElementById('dupSens').value);
+  box.innerHTML = '';
+  status.textContent = 'Calculando impressões das fotos...';
+  const todos = await calcularTodosHashes((f, t) => { status.textContent = `Analisando fotos... ${f}/${t}`; });
+  status.textContent = 'Comparando...';
+  // agrupa por proximidade (union-find simples)
+  const pai = {}; todos.forEach(o => pai[o.id] = o.id);
+  const find = x => { while (pai[x] !== x) x = pai[x] = pai[pai[x]]; return x; };
+  const une = (a, b) => { pai[find(a)] = find(b); };
+  for (let i = 0; i < todos.length; i++)
+    for (let j = i + 1; j < todos.length; j++)
+      if (distHamming(todos[i].hash, todos[j].hash) <= limiar) une(todos[i].id, todos[j].id);
+  const grupos = {};
+  todos.forEach(o => { const r = find(o.id); (grupos[r] = grupos[r] || []).push(o.id); });
+  const parecidas = Object.values(grupos).filter(g => g.length > 1);
+  if (!parecidas.length) { status.textContent = '✓ Nenhuma peça parecida encontrada com essa sensibilidade.'; return; }
+  const totalPecas = parecidas.reduce((s, g) => s + g.length, 0);
+  status.textContent = `${parecidas.length} grupo(s), ${totalPecas} peças. Revise e marque o que fazer:`;
+  box.innerHTML = parecidas.map((g, gi) => {
+    const cards = g.map(id => {
+      const item = wardrobe.find(i => i.id === id);
+      const p = photos[id]; const u = Array.isArray(p) ? p[0] : p;
+      return `<div style="text-align:center;width:80px;flex-shrink:0">
+        <div style="width:80px;height:80px;border-radius:8px;overflow:hidden;background:#0e0e0e" onclick="document.getElementById('dupModal').style.display='none';openEditModal(${id})">${u?`<img src="${u}" style="width:100%;height:100%;object-fit:cover">`:'📷'}</div>
+        <div style="font-size:11px;color:var(--text);margin-top:3px">#${id}</div>
+        <div style="font-size:9px;color:var(--muted);line-height:1.2;height:22px;overflow:hidden">${item?item.tipo:''}</div>
+        <button onclick="event.stopPropagation();deletarPecaDup(${id}, this)" style="font-size:10px;color:var(--red);background:none;border:1px solid var(--red);border-radius:6px;padding:2px 6px;margin-top:2px;cursor:pointer">excluir</button>
+      </div>`;
+    }).join('');
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:var(--surface)">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Grupo ${gi+1} — ${g.length} parecidas</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>
+    </div>`;
+  }).join('');
+}
+async function deletarPecaDup(id, btn) {
+  if (!confirm(`Excluir a peça #${id}? Remove a peça, fotos e tags. Não pode ser desfeito.`)) return;
+  await delFoto('item-' + id + '-0');
+  await delFoto('item-' + id + '-1');
+  delete photos[id]; delete itemTags[id];
+  await idbDel('hash:item-' + id);
+  wardrobe = wardrobe.filter(i => i.id !== id);
+  selectedItems.delete(id);
+  try { localStorage.setItem('gr_photos', JSON.stringify(photos)); } catch(e) {}
+  saveAll(); buildFilterUI(); filterItems();
+  await flushCloudSync();
+  // some o cartão da peça excluída
+  const card = btn.closest('div[style*="width: 80px"]') || btn.parentElement;
+  if (card) card.style.display = 'none';
+  showToast(`#${id} excluída`);
+}
+
 
 // ===================== DIAGNÓSTICO DE ARMAZENAMENTO =====================
 async function subirFotosLocais() {
